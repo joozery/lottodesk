@@ -2,12 +2,10 @@ import { RATES } from "./prize-calc";
 import type { Rates } from "./types";
 
 export type RateOverrides = Partial<Rates>;
+/** rates = อัตราจ่ายกลางที่ใช้กับทุกคน (ประเภทที่ไม่ได้ตั้งใช้ค่าเริ่มต้น); commissions = % ค่าคอมของเจ้ามือแต่ละราย */
 export interface RateConfig {
-  dealers: Record<string, RateOverrides>;
-  customers: Record<string, RateOverrides>;
+  rates: RateOverrides;
+  commissions: Record<string, number>;
 }
 
-/** อัตราจ่ายที่ใช้จริง: ลูกค้า > เจ้ามือ > เริ่มต้น (ระบุแยกตามประเภทการแทง) */
-export function resolveRates(config: RateConfig, dealerId: string | undefined, customerId: string | null): Rates {
-  return { ...RATES, ...(dealerId ? config.dealers[dealerId] : undefined), ...(customerId ? config.customers[customerId] : undefined) };
-}
+export const resolveRates = (config: RateConfig): Rates => ({ ...RATES, ...config.rates });

@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 import { useState, type ComponentType } from "react";
 import { Ellipsis, Settings } from "@/components/icons";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
-import { NAV_GROUPS, SETTINGS_ITEM } from "@/config/nav";
+import { useAuth } from "@/components/auth/auth-provider";
+import { ADMIN_ITEM, NAV_GROUPS, SETTINGS_ITEM } from "@/config/nav";
+import { canAccessPath } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 interface NavEntry {
@@ -14,17 +16,19 @@ interface NavEntry {
   icon: ComponentType<{ className?: string }>;
 }
 
-const ALL: NavEntry[] = [...NAV_GROUPS.flatMap((g) => g.items as readonly NavEntry[]), { ...SETTINGS_ITEM, icon: Settings }];
+const ALL: NavEntry[] = [...NAV_GROUPS.flatMap((g) => g.items as readonly NavEntry[]), { ...SETTINGS_ITEM, icon: Settings }, ADMIN_ITEM];
 /** เมนูที่ใช้บ่อยอยู่บนแถบล่าง ที่เหลือรวมไว้ใน "เพิ่มเติม" */
 const PRIMARY_HREFS = ["/overview", "/entry", "/dealers", "/payments"];
-const PRIMARY = PRIMARY_HREFS.map((href) => ALL.find((i) => i.href === href)!);
-const MORE = ALL.filter((i) => !PRIMARY_HREFS.includes(i.href));
 
 const tab = "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] font-medium transition-colors";
 
 /** แถบเมนูล่างแบบแอปมือถือ — แสดงเฉพาะจอที่ไม่มี Sidebar (ต่ำกว่า xl) */
 export function BottomNav() {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const allowed = ALL.filter((i) => !user || canAccessPath(user, i.href));
+  const PRIMARY = allowed.filter((i) => PRIMARY_HREFS.includes(i.href));
+  const MORE = allowed.filter((i) => !PRIMARY_HREFS.includes(i.href));
   const [moreOpen, setMoreOpen] = useState(false);
   const moreActive = MORE.some((i) => pathname.startsWith(i.href));
 

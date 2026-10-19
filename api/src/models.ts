@@ -11,6 +11,9 @@ export const User = model("User", new Schema({
   name: { type: String, required: true },
   passwordHash: { type: String, required: true },
   role: { type: String, enum: ["admin", "staff"], default: "admin" },
+  /** สิทธิ์เข้าถึงหน้า (ใช้กับ role "staff"; admin ได้ทุกสิทธิ์) */
+  permissions: { type: [String], default: [] },
+  active: { type: Boolean, default: true },
 }, { timestamps: true }));
 
 const customerSchema = new Schema({ _id: id(), code: { type: String, required: true }, name: { type: String, required: true } });
@@ -19,6 +22,8 @@ export const Dealer = model("Dealer", new Schema({
   _id: id(),
   name: { type: String, required: true },
   collectors: { type: [collectorSchema], default: [] },
+  /** เปอร์เซ็นต์ค่าคอมมิชชันของเจ้ามือ (0–100) */
+  commission: { type: Number, default: 0, min: 0, max: 100 },
 }, { timestamps: true }));
 
 export const Period = model("Period", new Schema({
@@ -79,7 +84,7 @@ export const PrizeResultModel = model("PrizeResult", new Schema({
 
 /** อัตราจ่ายที่ตั้งทับ ต่อเจ้ามือหรือลูกค้า (เก็บเฉพาะประเภทที่ตั้ง) */
 export const RateOverride = model("RateOverride", new Schema({
-  scope: { type: String, enum: ["dealer", "customer"], required: true },
+  scope: { type: String, enum: ["global"], required: true },
   refId: { type: String, required: true },
   rates: { type: Schema.Types.Mixed, required: true },
 }).index({ scope: 1, refId: 1 }, { unique: true }));

@@ -39,7 +39,7 @@ export async function buildLedger(q: LedgerQuery): Promise<Ledger> {
 
   return {
     bills: bills.map((b) => {
-      const rates = resolveRates(rateConfig, dealerOf.get(b.collectorId), b.customerId ?? null);
+      const rates = resolveRates(rateConfig);
       const pub = pubBill(b);
       return { ...pub, rates, prize: billPrize(pub.lines, pub.lottery, resultByPeriod.get(b.periodId), rates) };
     }),

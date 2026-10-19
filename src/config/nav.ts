@@ -1,4 +1,4 @@
-import { ArrowLeftRight, BarChart3, LayoutDashboard, PenLine, Receipt, Trophy, Users } from "@/components/icons";
+import { ArrowLeftRight, BarChart3, LayoutDashboard, PenLine, Receipt, ShieldCheck, Trophy, Users } from "@/components/icons";
 
 export const NAV_GROUPS = [
   {
@@ -21,3 +21,4 @@ export const NAV_GROUPS = [
 ] as const;
 
 export const SETTINGS_ITEM = { label: "ตั้งค่า", href: "/settings" } as const;
+export const ADMIN_ITEM = { label: "จัดการแอดมิน", href: "/admin", icon: ShieldCheck } as const;

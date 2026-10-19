@@ -3,7 +3,7 @@ import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import type { Config } from "../config.js";
-import { COOKIE, signToken, requireAuth } from "../middleware/auth.js";
+import { COOKIE, signToken, requireAuth, toAuthUser } from "../middleware/auth.js";
 import { HttpError, parse } from "../middleware/http.js";
 import { User } from "../models.js";
 
@@ -21,7 +21,8 @@ export function authRouter(config: Config) {
     const user = await User.findOne({ email }).lean();
     const ok = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
     if (!user || !ok) throw new HttpError(401, "อีเมลหรือรหัสผ่านไม่ถูกต้อง");
-    const me = { id: user._id, name: user.name, email: user.email, role: user.role ?? "admin" };
+    if (user.active === false) throw new HttpError(403, "บัญชีนี้ถูกปิดการใช้งาน กรุณาติดต่อผู้ดูแลระบบ");
+    const me = toAuthUser(user);
     res.cookie(COOKIE, signToken(me, config.JWT_SECRET), cookieOpts).json(me);
   });
 

@@ -7,7 +7,8 @@ import { useAuth } from "@/components/auth/auth-provider";
 import type { ComponentType } from "react";
 import { Settings } from "@/components/icons";
 import { Avatar } from "@/components/ui/avatar";
-import { NAV_GROUPS, SETTINGS_ITEM } from "@/config/nav";
+import { ADMIN_ITEM, NAV_GROUPS, SETTINGS_ITEM } from "@/config/nav";
+import { canAccessPath } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 function NavItem({ label, href, icon: Icon, onNavigate }: {
@@ -59,20 +60,24 @@ export function AppSidebar({ className, onNavigate }: { className?: string; onNa
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="เมนูหลัก">
-        {NAV_GROUPS.map((group) => (
-          <div key={group.label} className="mb-5 last:mb-0">
-            <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{group.label}</p>
-            <div className="flex flex-col gap-0.5">
-              {group.items.map((item) => (
-                <NavItem key={item.href} {...item} onNavigate={onNavigate} />
-              ))}
+        {NAV_GROUPS.map((group) => {
+          const items = group.items.filter((item) => !user || canAccessPath(user, item.href));
+          return items.length === 0 ? null : (
+            <div key={group.label} className="mb-5 last:mb-0">
+              <p className="mb-1.5 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{group.label}</p>
+              <div className="flex flex-col gap-0.5">
+                {items.map((item) => (
+                  <NavItem key={item.href} {...item} onNavigate={onNavigate} />
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </nav>
 
       <div className="shrink-0 border-t border-slate-100 p-3">
-        <NavItem {...SETTINGS_ITEM} icon={Settings} onNavigate={onNavigate} />
+        {(!user || canAccessPath(user, SETTINGS_ITEM.href)) && <NavItem {...SETTINGS_ITEM} icon={Settings} onNavigate={onNavigate} />}
+        {user?.role === "admin" && <NavItem {...ADMIN_ITEM} onNavigate={onNavigate} />}
         <div className="mt-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-2.5">
           <div className="relative">
             <Avatar name={user?.name ?? "ผู้ใช้"} className="size-9" />

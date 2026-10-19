@@ -4,7 +4,7 @@ import express from "express";
 import helmet from "helmet";
 import mongoose from "mongoose";
 import type { Config } from "./config.js";
-import { requireAuth } from "./middleware/auth.js";
+import { requireAdmin, requireAuth, requireWrite } from "./middleware/auth.js";
 import { HttpError, errorHandler } from "./middleware/http.js";
 import { authRouter } from "./routes/auth.js";
 import { billsRouter } from "./routes/bills.js";
@@ -14,6 +14,7 @@ import { paymentsRouter } from "./routes/payments.js";
 import { periodsRouter } from "./routes/periods.js";
 import { prizeResultsRouter } from "./routes/prize-results.js";
 import { ratesRouter } from "./routes/rates.js";
+import { usersRouter } from "./routes/users.js";
 
 export function createApp(config: Config) {
   const app = express();
@@ -30,13 +31,14 @@ export function createApp(config: Config) {
   api.use("/auth", authRouter(config));
 
   api.use(requireAuth(config.JWT_SECRET));
-  api.use("/dealers", dealersRouter());
+  api.use("/dealers", requireWrite("dealers", "entry"), dealersRouter());
   api.use("/periods", periodsRouter());
   api.use("/ledger", ledgerRouter());
-  api.use("/bills", billsRouter());
-  api.use("/payments", paymentsRouter());
-  api.use("/prize-results", prizeResultsRouter());
-  api.use("/rates", ratesRouter());
+  api.use("/bills", requireWrite("entry"), billsRouter());
+  api.use("/payments", requireWrite("payments"), paymentsRouter());
+  api.use("/prize-results", requireWrite("results"), prizeResultsRouter());
+  api.use("/rates", requireWrite("settings"), ratesRouter());
+  api.use("/users", requireAdmin, usersRouter());
   api.use(() => { throw new HttpError(404, "ไม่พบ endpoint นี้"); });
 
   app.use("/api", api);

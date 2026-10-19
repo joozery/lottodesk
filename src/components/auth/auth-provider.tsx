@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { LoadingScreen } from "./loading-screen";
 import { ApiError } from "@/services/api";
 import { fetchMe, logout as logoutRequest, type AuthUser } from "@/services/auth-service";
 
@@ -49,5 +50,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  return <AuthContext.Provider value={{ user, logout }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, logout }}>
+      {children}
+      {/* ยังตรวจ login ไม่เสร็จ: คลุมหน้าไว้ (children ยัง render อยู่ด้านล่าง) */}
+      {!user && <LoadingScreen />}
+    </AuthContext.Provider>
+  );
 }

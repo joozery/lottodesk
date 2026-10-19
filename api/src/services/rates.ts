@@ -1,21 +1,17 @@
 import { RATES } from "../shared/prize-calc.js";
 import type { BetType, Rates } from "../shared/types.js";
-import { RateOverride } from "../models.js";
+import { Dealer, RateOverride } from "../models.js";
 
 export type RateOverrides = Partial<Rates>;
-export interface RateConfig { dealers: Record<string, RateOverrides>; customers: Record<string, RateOverrides> }
+/** rates = อัตราจ่ายกลางที่ใช้กับทุกคน (ประเภทที่ไม่ได้ตั้งใช้ค่าเริ่มต้น); commissions = เปอร์เซ็นต์ค่าคอมของเจ้ามือแต่ละราย */
+export interface RateConfig { rates: RateOverrides; commissions: Record<string, number> }
 
 export const BET_TYPE_KEYS = Object.keys(RATES) as BetType[];
 
 export async function loadRateConfig(): Promise<RateConfig> {
-  const config: RateConfig = { dealers: {}, customers: {} };
-  for (const r of await RateOverride.find().lean()) {
-    (r.scope === "dealer" ? config.dealers : config.customers)[r.refId] = r.rates as RateOverrides;
-  }
-  return config;
+  const [global, dealers] = await Promise.all([RateOverride.findOne({ scope: "global", refId: "default" }).lean(), Dealer.find({}, { commission: 1 }).lean()]);
+  return { rates: (global?.rates ?? {}) as RateOverrides, commissions: Object.fromEntries(dealers.map((d) => [d._id, d.commission ?? 0])) };
 }
 
-/** อัตราจ่ายที่ใช้จริง: ลูกค้า > เจ้ามือ > เริ่มต้น (ระบุแยกตามประเภทการแทง) */
-export function resolveRates(config: RateConfig, dealerId: string | undefined, customerId: string | null): Rates {
-  return { ...RATES, ...(dealerId ? config.dealers[dealerId] : undefined), ...(customerId ? config.customers[customerId] : undefined) };
-}
+/** อัตราจ่ายที่ใช้จริง: ค่ากลางที่ตั้งไว้ทับค่าเริ่มต้น */
+export const resolveRates = (config: RateConfig): Rates => ({ ...RATES, ...config.rates });
