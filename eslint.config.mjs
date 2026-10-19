@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // backend มี package และ tsconfig ของตัวเอง
+    "api/**",
   ]),
 ]);
 

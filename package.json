@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "dev:api": "npm --prefix api run dev",
+    "api:seed": "npm --prefix api run seed",
+    "api:create-user": "npm --prefix api run create-user"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
