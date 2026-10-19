@@ -12,8 +12,9 @@ import { ErrorState } from "@/components/ui/state-panels";
 import { useRemote } from "@/hooks/use-remote";
 import { BET_LABEL, RATES } from "@/lib/prize-calc";
 import type { BetType, Dealer } from "@/lib/types";
-import { fetchDealers } from "@/services/mock-service";
-import { readRateConfig, resolveRates, saveRateConfig, type RateConfig, type RateOverrides } from "@/services/rate-store";
+import { fetchDealers } from "@/services/dealers-service";
+import { resolveRates, type RateConfig, type RateOverrides } from "@/lib/rates";
+import { fetchRates, saveRates } from "@/services/rates-service";
 import { SettingsTabs } from "../settings-tabs";
 
 const TYPES = Object.keys(RATES) as BetType[];
@@ -23,8 +24,9 @@ type Scope = string;
 
 export function RatesSettingsPage() {
   const [nonce, setNonce] = useState(0);
-  const { data: dealers, error } = useRemote(`rates-dealers-${nonce}`, fetchDealers);
-  const { data: initial } = useRemote(`rates-config-${nonce}`, async () => readRateConfig());
+  const { data: dealers, error: dealersError } = useRemote(`rates-dealers-${nonce}`, fetchDealers);
+  const { data: initial, error: ratesError } = useRemote(`rates-config-${nonce}`, fetchRates);
+  const error = dealersError || ratesError;
 
   return (
     <>
@@ -61,6 +63,7 @@ function RatesEditor({ dealers, initial }: { dealers: Dealer[]; initial: RateCon
   const first: Scope = `dealer:${dealers[0]?.id ?? ""}`;
   const [scope, setScope] = useState<Scope>(first);
   const [draft, setDraft] = useState<Record<BetType, string>>(() => draftOf(overridesOf(initial, first)));
+  const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
   function changeScope(next: Scope) {
@@ -81,16 +84,18 @@ function RatesEditor({ dealers, initial }: { dealers: Dealer[]; initial: RateCon
   const parsed = TYPES.map((t) => ({ t, raw: draft[t].trim(), n: Number(draft[t]) }));
   const invalid = parsed.filter((p) => p.raw !== "" && !(Number.isFinite(p.n) && p.n > 0));
 
-  function save() {
+  async function save() {
     if (invalid.length) return;
     const next: RateOverrides = {};
     for (const p of parsed) if (p.raw !== "") next[p.t] = p.n;
-    const updated: RateConfig = { ...config, [kind === "dealer" ? "dealers" : "customers"]: { ...(kind === "dealer" ? config.dealers : config.customers), [id]: next } };
-    if (saveRateConfig(updated)) {
-      setConfig(updated);
+    setSaving(true);
+    try {
+      setConfig(await saveRates(kind, id, next));
       setNotice({ ok: true, text: "บันทึกอัตราจ่ายแล้ว บิลและผลรางวัลจะคำนวณด้วยอัตราใหม่" });
-    } else {
-      setNotice({ ok: false, text: "บันทึกไม่สำเร็จ กรุณาตรวจพื้นที่จัดเก็บในเบราว์เซอร์" });
+    } catch (e) {
+      setNotice({ ok: false, text: e instanceof Error ? e.message : "บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" });
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -156,7 +161,7 @@ function RatesEditor({ dealers, initial }: { dealers: Dealer[]; initial: RateCon
         </table>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <Button onClick={save} disabled={invalid.length > 0}>บันทึก</Button>
+          <Button onClick={() => void save()} disabled={invalid.length > 0 || saving}>{saving ? "กำลังบันทึก..." : "บันทึก"}</Button>
           <Button variant="ghost" onClick={() => setDraft(blank())}>ล้างทั้งหมด (ใช้ค่าสืบทอด)</Button>
           {invalid.length > 0 && <span role="alert" className="text-xs text-red-600">อัตราต้องเป็นเลขมากกว่า 0</span>}
         </div>

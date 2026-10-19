@@ -11,15 +11,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/state-panels";
 import { useRemote } from "@/hooks/use-remote";
 import { formatDate, formatNumber } from "@/lib/format";
-import type { Customer, Lottery, Period } from "@/lib/types";
-import { fetchDealers, fetchPeriods } from "@/services/mock-service";
+import type { BetLine, Lottery, Period } from "@/lib/types";
+import { createBill, createCustomer, fetchDealers, fetchPeriods } from "@/services/dealers-service";
 
 type EntryType = "2" | "3" | "run";
 type EntryRow = { id: string; number: string; type: EntryType; top: number; tod: number; bottom: number };
 type SheetMap = Record<string, EntryRow[]>;
 
 const STORAGE_KEY = "lottodesk.entry-sheets.v1";
-const CUSTOMERS_KEY = "lottodesk.entry-customers.v1";
 const initialRows: EntryRow[] = ["785", "758", "875", "857", "578", "587"].map((number, i) => ({
   id: `sample-${i}`, number, type: "3", top: 500, tod: 500, bottom: 0,
 }));
@@ -86,7 +85,7 @@ export function EntryPage() {
   const [notice, setNotice] = useState("");
   const [newCustomer, setNewCustomer] = useState("");
   const [addingCustomer, setAddingCustomer] = useState(false);
-  const [extraCustomers, setExtraCustomers] = useState<Record<string, Customer[]>>({});
+  const [submitting, setSubmitting] = useState(false);
   const [sheets, setSheets] = useState<SheetMap>(initialSheets);
   const [savedSheets, setSavedSheets] = useState<SheetMap>(initialSheets);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -108,8 +107,6 @@ export function EntryPage() {
             setSavedSheets(parsed);
           }
         }
-        const storedCustomers = localStorage.getItem(CUSTOMERS_KEY);
-        if (storedCustomers) setExtraCustomers(JSON.parse(storedCustomers) as Record<string, Customer[]>);
       } catch {
         setNotice("อ่านแผ่นที่บันทึกในเบราว์เซอร์ไม่สำเร็จ");
       }
@@ -119,7 +116,7 @@ export function EntryPage() {
 
   const dealer = dealers.find((d) => d.id === dealerChoice) ?? dealers[0];
   const collector = dealer?.collectors.find((c) => c.id === collectorChoice) ?? dealer?.collectors[0];
-  const customers = [...(collector?.customers ?? []), ...(extraCustomers[collector?.id ?? ""] ?? [])];
+  const customers = collector?.customers ?? [];
   const customer = customers.find((c) => c.id === customerChoice) ?? customers[0];
   const periodOptions = periods.filter((p) => p.lottery === lottery).sort((a, b) => b.drawDate.localeCompare(a.drawDate));
   const period = periodOptions.find((p) => p.id === periodChoice) ?? preferredPeriod(periods, lottery);
@@ -173,6 +170,53 @@ export function EntryPage() {
     setTod(row.tod ? String(row.tod) : "");
     setBottom(row.bottom ? String(row.bottom) : "");
     numberRef.current?.focus();
+  }
+
+  async function addCustomer(event: FormEvent) {
+    event.preventDefault();
+    const name = newCustomer.trim();
+    if (!name || !dealer || !collector) return;
+    try {
+      const updated = await createCustomer(dealer.id, collector.id, name);
+      const created = updated.collectors.find((c) => c.id === collector.id)?.customers.at(-1);
+      setNonce((n) => n + 1);
+      if (created) setCustomerChoice(created.id);
+      setNewCustomer("");
+      setAddingCustomer(false);
+      setSheet(1);
+      setNotice(`เพิ่มลูกค้า ${name} แล้ว`);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "เพิ่มลูกค้าไม่สำเร็จ");
+    }
+  }
+
+  /** แปลงแผ่นโพยเป็นรายการแทง: 2 ตัว = บน/ล่าง, 3 ตัว = บน/โต๊ด/ล่าง, วิ่ง = บน/ล่าง */
+  function linesOf(sheetRows: EntryRow[]): BetLine[] {
+    const types = { "2": { top: "top2", bottom: "bottom2" }, "3": { top: "top3", tod: "tod3", bottom: "bottom3" }, run: { top: "runTop", bottom: "runBottom" } } as const;
+    return sheetRows.flatMap((row) => {
+      const map: Partial<Record<"top" | "tod" | "bottom", BetLine["type"]>> = types[row.type];
+      return (["top", "tod", "bottom"] as const).flatMap((field) => {
+        const type = map[field];
+        return type && row[field] > 0 ? [{ type, number: row.number, amount: row[field] }] : [];
+      });
+    });
+  }
+
+  async function submitBill() {
+    if (!collector || !period || !rows.length) return;
+    setSubmitting(true);
+    try {
+      const bill = await createBill({ collectorId: collector.id, customerId: customer?.id ?? null, periodId: period.id, lines: linesOf(rows) });
+      const next = { ...sheets, [key]: [] };
+      setSheets(next);
+      // ล้างแผ่นที่ส่งแล้ว ทั้งในหน้าจอและที่บันทึกร่างไว้ในเบราว์เซอร์
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); setSavedSheets(next); } catch { /* ร่างในเบราว์เซอร์ไม่สำคัญเท่าบิลที่ส่งสำเร็จแล้ว */ }
+      setNotice(`ส่งเป็นบิล ${bill.no} ยอด ${money(bill.amount)} แล้ว ดูได้ที่หน้ารายการบิล`);
+    } catch (e) {
+      setNotice(e instanceof Error ? e.message : "ส่งบิลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function saveSheet() {
@@ -278,7 +322,7 @@ export function EntryPage() {
               <aside className="min-w-0 space-y-3 max-lg:order-2">
                 <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                   <div className="mb-2 flex items-center justify-between"><h2 className="font-bold text-[#102356]">ลูกค้า</h2><Button size="icon" className="size-8" aria-label="เพิ่มลูกค้า" onClick={() => setAddingCustomer((v) => !v)}><Plus className="size-4" /></Button></div>
-                  {addingCustomer && <form onSubmit={(e) => { e.preventDefault(); if (!newCustomer.trim()) return; const id = `local-${Date.now()}`; const next = { id, code: `NEW-${String((extraCustomers[collector.id] ?? []).length + 1).padStart(2, "0")}`, name: newCustomer.trim() }; const updated = { ...extraCustomers, [collector.id]: [...(extraCustomers[collector.id] ?? []), next] }; try { localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(updated)); setExtraCustomers(updated); setCustomerChoice(id); setNewCustomer(""); setAddingCustomer(false); setSheet(1); } catch { setNotice("เพิ่มลูกค้าไม่สำเร็จ กรุณาตรวจพื้นที่จัดเก็บในเบราว์เซอร์"); } }} className="mb-3 flex gap-1.5"><Input value={newCustomer} onChange={(e) => setNewCustomer(e.target.value)} placeholder="ชื่อลูกค้า" aria-label="ชื่อลูกค้าใหม่" /><Button type="submit" size="sm">เพิ่ม</Button></form>}
+                  {addingCustomer && <form onSubmit={(e) => { void addCustomer(e); }} className="mb-3 flex gap-1.5"><Input value={newCustomer} onChange={(e) => setNewCustomer(e.target.value)} placeholder="ชื่อลูกค้า" aria-label="ชื่อลูกค้าใหม่" /><Button type="submit" size="sm">เพิ่ม</Button></form>}
                   <label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="รหัส / ชื่อลูกค้า" aria-label="ค้นหาลูกค้า" className="pl-9" /></label>
                   <div className="mt-2 max-h-72 overflow-y-auto rounded-lg border border-slate-200">
                     <div className="grid grid-cols-[70px_1fr] bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-500"><span>รหัส</span><span>ชื่อลูกค้า</span></div>
@@ -309,7 +353,7 @@ export function EntryPage() {
                   </form>
                   <div className="mt-2.5 flex flex-wrap items-center gap-4 text-xs text-slate-600"><label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={reverse} onChange={(e) => setReverse(e.target.checked)} className="accent-blue-600" /> กลับเลข</label><label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={lockAmount} onChange={(e) => setLockAmount(e.target.checked)} className="accent-blue-600" /> ล็อกยอดเงิน</label><span className="ml-auto text-slate-400">Enter เพิ่มรายการ · Tab ช่องถัดไป · Esc ล้างช่อง</span></div>
                 </section>
-                <div className="flex items-center justify-end gap-2 max-xl:sticky max-xl:bottom-[calc(4.25rem+env(safe-area-inset-bottom))] max-xl:z-20 max-xl:-mx-3 max-xl:border-t max-xl:border-slate-200 max-xl:bg-white/95 max-xl:px-3 max-xl:py-2 max-xl:backdrop-blur"><Button variant="outline" onClick={() => { setSheets(savedSheets); clearEntry(); setNotice("ยกเลิกการแก้ไขที่ยังไม่บันทึกแล้ว"); }} disabled={!dirty} className="max-xl:flex-1">ยกเลิก</Button><Button onClick={saveSheet} disabled={!dirty} className="max-xl:flex-[2]"><Layers3 className="size-4" /> บันทึกแผ่น {money(totals.total)}</Button></div>
+                <div className="flex items-center justify-end gap-2 max-xl:sticky max-xl:bottom-[calc(4.25rem+env(safe-area-inset-bottom))] max-xl:z-20 max-xl:-mx-3 max-xl:border-t max-xl:border-slate-200 max-xl:bg-white/95 max-xl:px-3 max-xl:py-2 max-xl:backdrop-blur"><Button variant="outline" onClick={() => { setSheets(savedSheets); clearEntry(); setNotice("ยกเลิกการแก้ไขที่ยังไม่บันทึกแล้ว"); }} disabled={!dirty} className="max-xl:flex-1">ยกเลิก</Button><Button onClick={saveSheet} disabled={!dirty} className="max-xl:flex-[2]"><Layers3 className="size-4" /> บันทึกแผ่น {money(totals.total)}</Button><Button onClick={() => void submitBill()} disabled={!rows.length || !open || submitting || !customer} className="max-xl:flex-[2]">{submitting ? "กำลังส่ง..." : "ส่งเป็นบิล"}</Button></div>
                 {notice && <p role="status" className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">{notice}</p>}
               </div>
 

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/components/auth/auth-provider";
 import type { ComponentType } from "react";
 import { Settings } from "@/components/icons";
 import { Avatar } from "@/components/ui/avatar";
@@ -48,6 +49,7 @@ function NavItem({ label, href, icon: Icon, onNavigate }: {
 }
 
 export function AppSidebar({ className, onNavigate }: { className?: string; onNavigate?: () => void }) {
+  const { user } = useAuth();
   return (
     <div className={cn("flex h-full flex-col bg-white", className)}>
       <div className="flex h-14 shrink-0 items-center border-b border-slate-100 px-5">
@@ -73,12 +75,12 @@ export function AppSidebar({ className, onNavigate }: { className?: string; onNa
         <NavItem {...SETTINGS_ITEM} icon={Settings} onNavigate={onNavigate} />
         <div className="mt-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-2.5">
           <div className="relative">
-            <Avatar name="ผู้ดูแล" className="size-9" />
+            <Avatar name={user.name} className="size-9" />
             <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-white" aria-label="ออนไลน์" />
           </div>
           <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm font-semibold text-slate-800">ผู้ดูแลระบบ</p>
-            <p className="truncate text-xs text-slate-500">admin@lottodesk</p>
+            <p className="truncate text-sm font-semibold text-slate-800">{user.name}</p>
+            <p className="truncate text-xs text-slate-500">{user.email}</p>
           </div>
         </div>
       </div>

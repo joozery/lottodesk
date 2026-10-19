@@ -1,16 +1,22 @@
-// Service ผลรางวัล — ตอนนี้เก็บใน localStorage ผ่าน prize-store แทนที่ด้วย API จริงได้
+// Service ผลรางวัล — เรียก API จริง
 import type { PrizeResult } from "@/lib/prize";
-import { guard } from "./mock-utils";
-import { allPrizeResults, storePrizeResult } from "./prize-store";
+import { api, ApiError } from "./api";
 
 /** null = งวดนี้ยังไม่มีผลรางวัล */
 export async function fetchPrizeResult(periodId: string): Promise<PrizeResult | null> {
-  await guard();
-  return allPrizeResults().find((r) => r.periodId === periodId) ?? null;
+  try {
+    return await api<PrizeResult>(`/prize-results/${periodId}`);
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
 }
 
-/** persisted = เก็บสำเร็จจริงหรือไม่ (false เมื่อเบราว์เซอร์ไม่ให้เขียนข้อมูล) */
-export async function savePrizeResult(result: PrizeResult): Promise<{ persisted: boolean }> {
-  await guard();
-  return { persisted: storePrizeResult(result) };
+/** ผู้ยืนยัน/เวลาประกาศ กำหนดโดยเซิร์ฟเวอร์; throw เมื่อบันทึกไม่สำเร็จ */
+export async function savePrizeResult(result: PrizeResult): Promise<{ persisted: true }> {
+  await api<PrizeResult>(`/prize-results/${result.periodId}`, {
+    method: "PUT",
+    body: { groups: result.groups.map((g) => ({ key: g.key, numbers: g.numbers })) },
+  });
+  return { persisted: true };
 }

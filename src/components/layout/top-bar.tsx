@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { DropdownMenu } from "radix-ui";
+import { useAuth } from "@/components/auth/auth-provider";
 import { Bell, ChevronRight, Search, X } from "@/components/icons";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -25,6 +27,7 @@ interface TopBarProps {
 }
 
 export function TopBar({ breadcrumb, dealers, onPick }: TopBarProps) {
+  const { user, logout } = useAuth();
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   // มือถือ: ช่องค้นหาพับเก็บเป็นไอคอน แตะแล้วขยายเป็นแถวเต็มความกว้าง
@@ -118,7 +121,23 @@ export function TopBar({ breadcrumb, dealers, onPick }: TopBarProps) {
             <Bell className="size-5" />
             <span className="absolute right-2 top-2 size-2 rounded-full bg-orange-500 ring-2 ring-white" />
           </Button>
-          <Avatar name="ผู้ดูแล" />
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger aria-label="เมนูผู้ใช้" className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+              <Avatar name={user.name} />
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content align="end" sideOffset={6} className="z-[60] min-w-48 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
+                <div className="px-3 py-2">
+                  <p className="text-sm font-medium text-slate-900">{user.name}</p>
+                  <p className="text-xs text-slate-500">{user.email}</p>
+                </div>
+                <DropdownMenu.Separator className="my-1 h-px bg-slate-100" />
+                <DropdownMenu.Item onSelect={() => void logout()} className="cursor-pointer rounded-md px-3 py-2 text-sm text-slate-700 outline-none data-[highlighted]:bg-blue-50 data-[highlighted]:text-blue-700">
+                  ออกจากระบบ
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
         </div>
       </div>
       {searchOpen && <div className="px-4 pb-3 sm:hidden">{searchInput}</div>}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRemote } from "./use-remote";
-import { fetchDealers, fetchLedger, fetchPeriods } from "@/services/mock-service";
+import { fetchDealers, fetchLedger, fetchPeriods } from "@/services/dealers-service";
 import type { LedgerFilter, Period } from "@/lib/types";
 
 /**
