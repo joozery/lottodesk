@@ -25,6 +25,17 @@ export function dealersRouter() {
     res.status(201).json(pubDealer(dealer));
   });
 
+  r.patch("/:dealerId/collectors/:collectorId", async (req, res) => {
+    const { name } = parse(nameBody, req.body);
+    const dealer = await Dealer.findOneAndUpdate(
+      { _id: req.params.dealerId, "collectors._id": req.params.collectorId },
+      { $set: { "collectors.$.name": name } },
+      { returnDocument: "after" },
+    ).lean();
+    if (!dealer) throw new HttpError(404, "ไม่พบเจ้ามือหรือผู้ส่งโพย");
+    res.json(pubDealer(dealer));
+  });
+
   r.post("/:dealerId/collectors/:collectorId/customers", async (req, res) => {
     const { name } = parse(nameBody, req.body);
     const code = `CUS-${String(await nextSeq("customer")).padStart(3, "0")}`;

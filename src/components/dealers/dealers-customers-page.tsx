@@ -1,9 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { ChevronDown, Plus } from "@/components/icons";
 import { TopBar } from "@/components/layout/top-bar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { ErrorState } from "@/components/ui/state-panels";
@@ -16,7 +16,7 @@ import { CollectorProfile } from "./collector-profile";
 import { CustomerBillsDrawer } from "./customer-bills-drawer";
 import { CustomerTabs } from "./customer-tabs";
 import { DealerTree } from "./dealer-tree";
-import { AddCustomerDialog, EditCollectorDialog, NewBillDialog } from "./entity-dialogs";
+import { AddCollectorDialog, AddCustomerDialog, AddDealerDialog, EditCollectorDialog } from "./entity-dialogs";
 import { FinancialSummaryCards } from "./financial-summary-cards";
 import { GroupSummary } from "./group-summary";
 import { LotteryFilter } from "./lottery-filter";
@@ -31,6 +31,7 @@ export function DealersCustomersPage() {
   const [periodChoice, setPeriodChoice] = useState<string | null>(null);
   const [range, setRange] = useState(DEFAULT_RANGE);
   const [nonce, setNonce] = useState(0);
+  const refresh = () => setNonce((n) => n + 1);
 
   const [selectedCollectorId, setSelectedCollectorId] = useState("c-a");
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set(["d-bank"]));
@@ -39,7 +40,8 @@ export function DealersCustomersPage() {
   const [treeOpen, setTreeOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
-  const [billOpen, setBillOpen] = useState(false);
+  const [dealerOpen, setDealerOpen] = useState(false);
+  const [collectorOpen, setCollectorOpen] = useState(false);
   const [viewCustomerId, setViewCustomerId] = useState<string | null>(null);
 
   const data = useDealersData(nonce, (all) => {
@@ -117,13 +119,14 @@ export function DealersCustomersPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-slate-900">เจ้ามือและลูกค้า</h1>
-                <Badge tone="orange">ข้อมูลตัวอย่าง</Badge>
               </div>
               <p className="mt-0.5 text-sm text-slate-500">จัดการเจ้ามือและลูกค้า แยกตามประเภทหวยและงวด</p>
             </div>
-            <Button onClick={() => setBillOpen(true)} disabled={!dealers || !periods}>
-              <Plus /> คีย์โพยใหม่
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => setDealerOpen(true)}><Plus /> เพิ่มเจ้ามือ</Button>
+              <Button variant="outline" onClick={() => setCollectorOpen(true)} disabled={!selection}><Plus /> เพิ่มผู้รวบรวมโพย</Button>
+              <Button asChild><Link href="/entry"><Plus /> คีย์โพยใหม่</Link></Button>
+            </div>
           </div>
           <div className="mb-5 flex flex-wrap items-center gap-3">
             <LotteryFilter value={lottery} onChange={changeLottery} />
@@ -199,20 +202,12 @@ export function DealersCustomersPage() {
         onClose={() => setViewCustomerId(null)}
       />
 
-      {selection && dealers && periods && (
+      <AddDealerDialog open={dealerOpen} onOpenChange={setDealerOpen} onSaved={refresh} />
+      {selection && (
         <>
-          <EditCollectorDialog open={editOpen} onOpenChange={setEditOpen} collector={selection.collector} />
-          <AddCustomerDialog open={addOpen} onOpenChange={setAddOpen} collector={selection.collector} />
-          <NewBillDialog
-            open={billOpen}
-            onOpenChange={setBillOpen}
-            dealers={dealers}
-            periods={periods}
-            dealerId={selection.dealer.id}
-            collectorId={selection.collector.id}
-            lottery={lottery === "all" ? "thai" : lottery}
-            periodId={lottery === "all" ? null : effectivePeriodId}
-          />
+          <AddCollectorDialog open={collectorOpen} onOpenChange={setCollectorOpen} dealer={selection.dealer} onSaved={refresh} />
+          <EditCollectorDialog open={editOpen} onOpenChange={setEditOpen} dealer={selection.dealer} collector={selection.collector} onSaved={refresh} />
+          <AddCustomerDialog open={addOpen} onOpenChange={setAddOpen} dealer={selection.dealer} collector={selection.collector} onSaved={refresh} />
         </>
       )}
     </>

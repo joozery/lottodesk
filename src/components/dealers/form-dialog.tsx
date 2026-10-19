@@ -17,48 +17,54 @@ export interface FormDialogProps {
   init: Values;
   /** คืนข้อความ error ต่อฟิลด์; object ว่าง = ผ่านการตรวจสอบ */
   validate: (values: Values) => Errors;
+  /** บันทึกจริง; throw = แสดงข้อความ error และไม่ปิดฟอร์ม */
+  onSubmit: (values: Values) => Promise<void>;
   children: (values: Values, set: (key: string, value: string) => void, errors: Errors) => ReactNode;
 }
 
-/**
- * ฟอร์มสำหรับข้อมูลตัวอย่าง: ตรวจสอบข้อมูลแล้วแจ้งชัดเจนว่า "ยังไม่ได้บันทึก"
- * เมื่อเชื่อมต่อ API จริง ให้เปลี่ยน onSubmit ให้เรียก service และแสดงว่าสำเร็จเมื่อบันทึกจริงเท่านั้น
- */
-function FormBody({ title, description, init, validate, children }: Omit<FormDialogProps, "open" | "onOpenChange">) {
+function FormBody({ title, description, init, validate, onSubmit, onOpenChange, children }: Omit<FormDialogProps, "open">) {
   const [values, setValues] = useState<Values>(init);
   const [errors, setErrors] = useState<Errors>({});
-  const [checked, setChecked] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
 
   const set = (key: string, value: string) => {
     setValues((v) => ({ ...v, [key]: value }));
-    setChecked(false);
+    setFailure(null);
   };
 
-  function onSubmit(e: FormEvent) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     const next = validate(values);
     setErrors(next);
-    setChecked(Object.keys(next).length === 0);
+    if (Object.keys(next).length) return;
+    setSaving(true);
+    setFailure(null);
+    try {
+      await onSubmit(values);
+      onOpenChange(false);
+    } catch (err) {
+      setFailure(err instanceof Error ? err.message : "บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+      setSaving(false);
+    }
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
+    <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4" noValidate>
       <div>
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
       </div>
       {children(values, set, errors)}
-      <div role="status" className="flex gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
-        <Info className="mt-0.5 size-4 shrink-0" />
-        <span>
-          {checked
-            ? "ข้อมูลผ่านการตรวจสอบแล้ว แต่ยังไม่ได้บันทึก เพราะหน้านี้ใช้ข้อมูลตัวอย่างและยังไม่ได้เชื่อมต่อ API"
-            : "หน้านี้ใช้ข้อมูลตัวอย่าง ข้อมูลที่กรอกจะไม่ถูกบันทึกลงระบบ"}
-        </span>
-      </div>
+      {failure && (
+        <div role="alert" className="flex gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700">
+          <Info className="mt-0.5 size-4 shrink-0" />
+          <span>{failure}</span>
+        </div>
+      )}
       <div className="flex justify-end gap-2">
-        <DialogClose asChild><Button type="button" variant="outline">ปิด</Button></DialogClose>
-        <Button type="submit">ตรวจสอบข้อมูล</Button>
+        <DialogClose asChild><Button type="button" variant="outline">ยกเลิก</Button></DialogClose>
+        <Button type="submit" disabled={saving}>{saving ? "กำลังบันทึก..." : "บันทึก"}</Button>
       </div>
     </form>
   );
@@ -68,7 +74,7 @@ export function FormDialog({ open, onOpenChange, ...body }: FormDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* mount เฉพาะตอนเปิด เพื่อรีเซ็ตค่าฟอร์มทุกครั้ง */}
-      <DialogContent>{open && <FormBody {...body} />}</DialogContent>
+      <DialogContent>{open && <FormBody {...body} onOpenChange={onOpenChange} />}</DialogContent>
     </Dialog>
   );
 }

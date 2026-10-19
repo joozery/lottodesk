@@ -22,3 +22,11 @@ export interface NewBill {
   paid?: boolean;
 }
 export const createBill = (bill: NewBill) => api<Omit<Bill, "prize" | "rates">>("/bills", { method: "POST", body: bill });
+
+export const createDealer = (name: string) => api<Dealer>("/dealers", { method: "POST", body: { name } });
+
+export const createCollector = (dealerId: string, name: string) =>
+  api<Dealer>(`/dealers/${dealerId}/collectors`, { method: "POST", body: { name } });
+
+export const renameCollector = (dealerId: string, collectorId: string, name: string) =>
+  api<Dealer>(`/dealers/${dealerId}/collectors/${collectorId}`, { method: "PATCH", body: { name } });

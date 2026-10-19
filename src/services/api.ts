@@ -6,7 +6,7 @@ export class ApiError extends Error {
 }
 
 interface Options {
-  method?: "GET" | "POST" | "PUT";
+  method?: "GET" | "POST" | "PUT" | "PATCH";
   body?: unknown;
   query?: Record<string, string | undefined>;
   /** true = ไม่พากลับหน้า login เมื่อ 401 (ใช้กับ /auth/*) */
