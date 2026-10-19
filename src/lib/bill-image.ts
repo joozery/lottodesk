@@ -71,9 +71,11 @@ export async function renderBillImage(view: BillView): Promise<Blob> {
   const ctx = canvas.getContext("2d")!;
   const font = (weight: number, size: number) => { ctx.font = `${weight} ${size}px ${family}`; };
   const text = (value: string, x: number, y: number, align: CanvasTextAlign, color: string) => {
-    ctx.textAlign = align;
+    // ไม่ใช้ ctx.textAlign: Safari บน iOS วาดข้อความที่มีภาษาไทยชิดซ้ายที่จุด x เสมอ ทำให้ข้อความชิดขวา/กลางหลุดขอบภาพ
+    ctx.textAlign = "left";
     ctx.fillStyle = color;
-    ctx.fillText(value, x, y);
+    const width = align === "left" ? 0 : ctx.measureText(value).width;
+    ctx.fillText(value, align === "right" ? x - width : align === "center" ? x - width / 2 : x, y);
   };
   ctx.textBaseline = "alphabetic";
 
