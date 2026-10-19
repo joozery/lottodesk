@@ -75,12 +75,12 @@ export function AppSidebar({ className, onNavigate }: { className?: string; onNa
         <NavItem {...SETTINGS_ITEM} icon={Settings} onNavigate={onNavigate} />
         <div className="mt-2 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/60 p-2.5">
           <div className="relative">
-            <Avatar name={user.name} className="size-9" />
+            <Avatar name={user?.name ?? "ผู้ใช้"} className="size-9" />
             <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-white" aria-label="ออนไลน์" />
           </div>
           <div className="min-w-0 leading-tight">
-            <p className="truncate text-sm font-semibold text-slate-800">{user.name}</p>
-            <p className="truncate text-xs text-slate-500">{user.email}</p>
+            <p className="truncate text-sm font-semibold text-slate-800">{user?.name ?? " "}</p>
+            <p className="truncate text-xs text-slate-500">{user?.email ?? " "}</p>
           </div>
         </div>
       </div>

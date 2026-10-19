@@ -123,13 +123,13 @@ export function TopBar({ breadcrumb, dealers, onPick }: TopBarProps) {
           </Button>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger aria-label="เมนูผู้ใช้" className="rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
-              <Avatar name={user.name} />
+              <Avatar name={user?.name ?? "ผู้ใช้"} />
             </DropdownMenu.Trigger>
             <DropdownMenu.Portal>
               <DropdownMenu.Content align="end" sideOffset={6} className="z-[60] min-w-48 rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
                 <div className="px-3 py-2">
-                  <p className="text-sm font-medium text-slate-900">{user.name}</p>
-                  <p className="text-xs text-slate-500">{user.email}</p>
+                  <p className="text-sm font-medium text-slate-900">{user?.name}</p>
+                  <p className="text-xs text-slate-500">{user?.email}</p>
                 </div>
                 <DropdownMenu.Separator className="my-1 h-px bg-slate-100" />
                 <DropdownMenu.Item onSelect={() => void logout()} className="cursor-pointer rounded-md px-3 py-2 text-sm text-slate-700 outline-none data-[highlighted]:bg-blue-50 data-[highlighted]:text-blue-700">

@@ -2,11 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/services/api";
 import { fetchMe, logout as logoutRequest, type AuthUser } from "@/services/auth-service";
 
-interface AuthValue { user: AuthUser; logout: () => Promise<void> }
+/** user = null ระหว่างตรวจ login (ข้อมูลจริงต้อง login อยู่แล้ว ไม่ผ่านจะถูกพาไป /login) */
+interface AuthValue { user: AuthUser | null; logout: () => Promise<void> }
 const AuthContext = createContext<AuthValue | null>(null);
 
 export function useAuth(): AuthValue {
@@ -15,7 +15,7 @@ export function useAuth(): AuthValue {
   return value;
 }
 
-/** ตรวจว่า login แล้วหรือยังก่อนแสดงหน้าในระบบ — ยังไม่ login พาไป /login */
+/** ตรวจ login ควบคู่ไปกับการแสดงหน้า (ไม่บล็อกการแสดงผล) — ยังไม่ login พาไป /login */
 export function AuthGate({ children }: { children: ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -49,6 +49,5 @@ export function AuthGate({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  if (!user) return <div className="p-6"><Skeleton className="h-96 rounded-xl" /></div>;
   return <AuthContext.Provider value={{ user, logout }}>{children}</AuthContext.Provider>;
 }
