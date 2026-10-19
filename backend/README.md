@@ -22,6 +22,6 @@ npm run dev                 # http://localhost:4000/api
 | GET/POST | `/api/bills` | คีย์บิลใหม่ (ตรวจจำนวนหลักตามประเภท) |
 | GET/POST | `/api/payments` · GET `/outstanding` | รับ–จ่ายเงิน; รับจากลูกค้าจะตัดยอดค้างบิลเก่าสุดก่อน |
 | GET/PUT | `/api/prize-results/:periodId` | ผลรางวัล |
-| GET | `/api/rates` · PUT `/api/rates/:dealer\|customer/:id` | อัตราจ่าย (บาทละ) ลูกค้า > เจ้ามือ > ค่าเริ่มต้น |
+| GET | `/api/rates` · PUT `/api/rates` · PUT `/api/rates/commission/:dealerId` | อัตราจ่าย (บาทละ) ใช้กับทุกคน + ค่าคอมมิชชันเจ้ามือ |
 
 `src/shared/` คัดลอกมาจาก frontend (`types.ts`, `prize.ts`, `prize-calc.ts`) — แก้สูตรที่ใดที่หนึ่งต้องแก้อีกที่ให้ตรงกัน
