@@ -1,6 +1,6 @@
 // แปลงเอกสาร MongoDB ให้ตรงกับรูปแบบที่ frontend ใช้ (id แทน _id, วันที่เป็น ISO string)
-import type { Activity, Bill, Dealer, Payment, Period } from "./shared/types.js";
-import type { PrizeResult } from "./shared/prize.js";
+import type { Activity, Bill, Dealer, Payment, Period } from "./shared/types";
+import type { PrizeResult } from "./shared/prize";
 
 type Doc = Record<string, any>;
 const iso = (d: Date | string) => new Date(d).toISOString();

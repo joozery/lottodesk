@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
-import { HttpError, parse } from "../middleware/http.js";
-import { Period, PrizeResultModel } from "../models.js";
-import { pubPrize } from "../serialize.js";
-import { PRIZE_SPEC } from "../shared/prize.js";
+import { HttpError, parse } from "../middleware/http";
+import { Period, PrizeResultModel } from "../models";
+import { pubPrize } from "../serialize";
+import { PRIZE_SPEC } from "../shared/prize";
 
 const body = z.object({ groups: z.array(z.object({ key: z.string(), numbers: z.array(z.string().regex(/^\d+$/)) })) });
 

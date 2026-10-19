@@ -4,8 +4,8 @@ import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import { createInterface } from "node:readline/promises";
 import { Writable } from "node:stream";
-import { loadConfig } from "../config.js";
-import { User } from "../models.js";
+import { loadConfig } from "../config";
+import { User } from "../models";
 
 let muted = false;
 const output = new Writable({ write(chunk, _enc, cb) { if (!muted) process.stdout.write(chunk); cb(); } });

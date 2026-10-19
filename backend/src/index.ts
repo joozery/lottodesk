@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
-import { createApp } from "./app.js";
-import { loadConfig } from "./config.js";
+import { createApp } from "./app";
+import { loadConfig } from "./config";
 
 const config = loadConfig();
 await mongoose.connect(config.MONGODB_URI, { dbName: config.MONGODB_DB, serverSelectionTimeoutMS: 8000 });

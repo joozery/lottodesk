@@ -25,3 +25,12 @@ npm run dev                 # http://localhost:4000/api
 | GET | `/api/rates` · PUT `/api/rates` · PUT `/api/rates/commission/:dealerId` | อัตราจ่าย (บาทละ) ใช้กับทุกคน + ค่าคอมมิชชันเจ้ามือ |
 
 `src/shared/` คัดลอกมาจาก frontend (`types.ts`, `prize.ts`, `prize-calc.ts`) — แก้สูตรที่ใดที่หนึ่งต้องแก้อีกที่ให้ตรงกัน
+
+## รันร่วมกับหน้าเว็บ (โหมดหลัก / Vercel)
+
+โค้ดในโฟลเดอร์นี้ถูกเรียกจาก `src/app/api/[[...path]]/route.ts` ของหน้าเว็บ จึงไม่ต้องรันเซิร์ฟเวอร์แยก — `npm run dev` ที่ root ก็ได้ API ที่ `/api/*` ด้วย
+
+- ในเครื่อง: ใส่ค่าใน `.env.local` ที่ root (`MONGODB_URI`, `MONGODB_DB`, `JWT_SECRET`, `COOKIE_SECURE`)
+- บน Vercel: ตั้ง env 4 ตัวเดียวกันใน Project Settings (`COOKIE_SECURE=true`) — ไม่ต้องตั้ง `NEXT_PUBLIC_API_URL`
+- `npm run dev:api` (พอร์ต 4000) ยังใช้รัน API แยกได้ ถ้าตั้ง `NEXT_PUBLIC_API_URL=http://localhost:4000/api`
+- import ในโฟลเดอร์นี้ไม่ใส่ `.js` ต่อท้าย เพื่อให้ Next.js (Turbopack) bundle ได้

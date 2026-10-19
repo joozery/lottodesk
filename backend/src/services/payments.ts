@@ -1,5 +1,5 @@
-import { Bill } from "../models.js";
-import { HttpError } from "../middleware/http.js";
+import { Bill } from "../models";
+import { HttpError } from "../middleware/http";
 
 /** ยอดค้างชำระของลูกค้าแต่ละราย รวมทุกงวด */
 export async function outstandingByCustomer(): Promise<Record<string, number>> {

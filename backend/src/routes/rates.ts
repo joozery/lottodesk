@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
-import { HttpError, parse } from "../middleware/http.js";
-import { Dealer, RateOverride } from "../models.js";
-import { BET_TYPE_KEYS, loadRateConfig } from "../services/rates.js";
+import { HttpError, parse } from "../middleware/http";
+import { Dealer, RateOverride } from "../models";
+import { BET_TYPE_KEYS, loadRateConfig } from "../services/rates";
 
 const rateValue = z.number().positive("อัตราต้องมากกว่า 0").max(1_000_000);
 const body = z.object(Object.fromEntries(BET_TYPE_KEYS.map((t) => [t, rateValue.optional()])) as Record<string, z.ZodOptional<typeof rateValue>>).strict();

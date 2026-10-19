@@ -2,10 +2,10 @@
 //   npm run seed            ใส่เมื่อฐานข้อมูลยังว่างเท่านั้น
 //   npm run seed -- --reset ล้างข้อมูลธุรกิจทั้งหมดก่อนใส่ (ไม่ลบผู้ใช้)
 import mongoose from "mongoose";
-import { loadConfig } from "../config.js";
-import { Activity, Bill, Counter, Dealer, Payment, Period, PrizeResultModel, RateOverride } from "../models.js";
-import { ACTIVITIES, BILLS, DEALERS, PAYMENTS, PERIODS } from "../seed-data/mock-data.js";
-import { PRIZE_RESULTS } from "../seed-data/mock-results.js";
+import { loadConfig } from "../config";
+import { Activity, Bill, Counter, Dealer, Payment, Period, PrizeResultModel, RateOverride } from "../models";
+import { ACTIVITIES, BILLS, DEALERS, PAYMENTS, PERIODS } from "../seed-data/mock-data";
+import { PRIZE_RESULTS } from "../seed-data/mock-results";
 
 const config = loadConfig();
 await mongoose.connect(config.MONGODB_URI, { dbName: config.MONGODB_DB, serverSelectionTimeoutMS: 8000 });

@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
-import { HttpError, parse } from "../middleware/http.js";
-import { Dealer, Payment } from "../models.js";
-import { pubPayment } from "../serialize.js";
-import { applyReceipt, outstandingByCustomer } from "../services/payments.js";
+import { HttpError, parse } from "../middleware/http";
+import { Dealer, Payment } from "../models";
+import { pubPayment } from "../serialize";
+import { applyReceipt, outstandingByCustomer } from "../services/payments";
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const listQuery = z.object({ lottery: z.enum(["all", "thai", "lao"]).default("all"), from: day, to: day });

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { parse } from "../middleware/http.js";
-import { buildLedger } from "../services/ledger.js";
+import { parse } from "../middleware/http";
+import { buildLedger } from "../services/ledger";
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const query = z.object({

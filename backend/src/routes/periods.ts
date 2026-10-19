@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
-import { HttpError, parse } from "../middleware/http.js";
-import { Period, PrizeResultModel } from "../models.js";
-import { pubPeriod } from "../serialize.js";
+import { HttpError, parse } from "../middleware/http";
+import { Period, PrizeResultModel } from "../models";
+import { pubPeriod } from "../serialize";
 
 const createBody = z.object({ lottery: z.enum(["thai", "lao"]), drawDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันที่ต้องเป็น YYYY-MM-DD") });
 

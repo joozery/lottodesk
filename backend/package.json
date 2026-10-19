@@ -5,8 +5,6 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
-    "build": "tsc -p tsconfig.build.json",
-    "start": "node --env-file-if-exists=.env dist/index.js",
     "typecheck": "tsc --noEmit",
     "seed": "tsx --env-file-if-exists=.env src/scripts/seed.ts",
     "create-user": "tsx --env-file-if-exists=.env src/scripts/create-user.ts"

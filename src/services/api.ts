@@ -1,5 +1,5 @@
 // ตัวเรียก API กลาง: ส่ง cookie login ไปด้วยทุกครั้ง; 401 = เซสชันหมดอายุ → กลับหน้า login
-const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api").replace(/\/$/, "");
+const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "/api").replace(/\/$/, "");
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message); }

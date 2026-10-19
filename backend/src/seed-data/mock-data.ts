@@ -1,5 +1,5 @@
 // ข้อมูลตัวอย่างทั้งหมด — ไม่ได้มาจากระบบจริง
-import type { Activity, BetLine, BetType, Bill, Dealer, Payment, Period } from "../shared/types.js";
+import type { Activity, BetLine, BetType, Bill, Dealer, Payment, Period } from "../shared/types";
 
 export const DEALERS: Dealer[] = [
   {

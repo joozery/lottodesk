@@ -1,8 +1,8 @@
-import { billPrize } from "../shared/prize-calc.js";
-import type { Activity, Ledger, LotteryFilter, Payment } from "../shared/types.js";
-import { Activity as ActivityModel, Bill, Dealer, Payment as PaymentModel, Period, PrizeResultModel } from "../models.js";
-import { pubActivity, pubBill, pubPayment, pubPrize } from "../serialize.js";
-import { loadRateConfig, resolveRates } from "./rates.js";
+import { billPrize } from "../shared/prize-calc";
+import type { Activity, Ledger, LotteryFilter, Payment } from "../shared/types";
+import { Activity as ActivityModel, Bill, Dealer, Payment as PaymentModel, Period, PrizeResultModel } from "../models";
+import { pubActivity, pubBill, pubPayment, pubPrize } from "../serialize";
+import { loadRateConfig, resolveRates } from "./rates";
 
 export interface LedgerQuery {
   lottery: LotteryFilter;

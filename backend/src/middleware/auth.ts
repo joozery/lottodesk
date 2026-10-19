@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import { User } from "../models.js";
-import { PERMISSION_KEYS, type Permission } from "../permissions.js";
+import { User } from "../models";
+import { PERMISSION_KEYS, type Permission } from "../permissions";
 
 export interface AuthUser { id: string; name: string; email: string; role: string; permissions: Permission[] }
 export const COOKIE = "ld_token";

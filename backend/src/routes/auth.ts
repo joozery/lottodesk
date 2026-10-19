@@ -2,10 +2,10 @@ import bcrypt from "bcryptjs";
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
-import type { Config } from "../config.js";
-import { COOKIE, signToken, requireAuth, toAuthUser } from "../middleware/auth.js";
-import { HttpError, parse } from "../middleware/http.js";
-import { User } from "../models.js";
+import type { Config } from "../config";
+import { COOKIE, signToken, requireAuth, toAuthUser } from "../middleware/auth";
+import { HttpError, parse } from "../middleware/http";
+import { User } from "../models";
 
 const loginBody = z.object({ email: z.string().trim().toLowerCase(), password: z.string().min(1) });
 

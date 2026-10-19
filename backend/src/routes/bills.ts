@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { z } from "zod";
-import { HttpError, parse } from "../middleware/http.js";
-import { Activity, Bill, Dealer, Period, nextSeq } from "../models.js";
-import { pubBill } from "../serialize.js";
-import { BET_LABEL } from "../shared/prize-calc.js";
+import { HttpError, parse } from "../middleware/http";
+import { Activity, Bill, Dealer, Period, nextSeq } from "../models";
+import { pubBill } from "../serialize";
+import { BET_LABEL } from "../shared/prize-calc";
 
 const DIGITS = { top3: 3, tod3: 3, bottom3: 3, top2: 2, bottom2: 2, runTop: 1, runBottom: 1 } as const;
 const line = z.object({

@@ -1,5 +1,5 @@
-import type { BetLine, BetType, Lottery, Rates } from "./types.js";
-import type { PrizeResult } from "./prize.js";
+import type { BetLine, BetType, Lottery, Rates } from "./types";
+import type { PrizeResult } from "./prize";
 
 export const BET_LABEL: Record<BetType, string> = {
   top3: "3 ตัวบน",

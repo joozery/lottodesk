@@ -1,8 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
-import { HttpError, parse } from "../middleware/http.js";
-import { Dealer, nextSeq } from "../models.js";
-import { pubDealer } from "../serialize.js";
+import { HttpError, parse } from "../middleware/http";
+import { Dealer, nextSeq } from "../models";
+import { pubDealer } from "../serialize";
 
 const nameBody = z.object({ name: z.string().trim().min(1, "กรุณากรอกชื่อ").max(100) });
 

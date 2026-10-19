@@ -1,6 +1,6 @@
-import { RATES } from "../shared/prize-calc.js";
-import type { BetType, Rates } from "../shared/types.js";
-import { Dealer, RateOverride } from "../models.js";
+import { RATES } from "../shared/prize-calc";
+import type { BetType, Rates } from "../shared/types";
+import { Dealer, RateOverride } from "../models";
 
 export type RateOverrides = Partial<Rates>;
 /** rates = อัตราจ่ายกลางที่ใช้กับทุกคน (ประเภทที่ไม่ได้ตั้งใช้ค่าเริ่มต้น); commissions = เปอร์เซ็นต์ค่าคอมของเจ้ามือแต่ละราย */

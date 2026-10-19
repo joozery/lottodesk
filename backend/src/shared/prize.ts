@@ -1,4 +1,4 @@
-import type { Lottery } from "./types.js";
+import type { Lottery } from "./types";
 
 export interface PrizeGroup {
   key: string;

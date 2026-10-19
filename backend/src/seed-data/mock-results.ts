@@ -1,5 +1,5 @@
 // ผลรางวัลตัวอย่าง — ไม่ใช่ผลจริง
-import type { PrizeResult } from "../shared/prize.js";
+import type { PrizeResult } from "../shared/prize";
 
 export const PRIZE_RESULTS: PrizeResult[] = [
   {

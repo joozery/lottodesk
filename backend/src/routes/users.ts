@@ -1,9 +1,9 @@
 import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { z } from "zod";
-import { HttpError, parse } from "../middleware/http.js";
-import { User } from "../models.js";
-import { PERMISSION_KEYS } from "../permissions.js";
+import { HttpError, parse } from "../middleware/http";
+import { User } from "../models";
+import { PERMISSION_KEYS } from "../permissions";
 
 const permissions = z.array(z.enum(PERMISSION_KEYS));
 const password = z.string().min(8, "รหัสผ่านต้องยาวอย่างน้อย 8 ตัว").max(200);
