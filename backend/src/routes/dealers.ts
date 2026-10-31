@@ -48,5 +48,16 @@ export function dealersRouter() {
     res.status(201).json(pubDealer(dealer));
   });
 
+  r.patch("/:dealerId/collectors/:collectorId/customers/:customerId", async (req, res) => {
+    const { discountPercent } = parse(z.object({ discountPercent: z.number().min(0).max(100) }), req.body);
+    const dealer = await Dealer.findOneAndUpdate(
+      { _id: req.params.dealerId, "collectors._id": req.params.collectorId, "collectors.customers._id": req.params.customerId },
+      { $set: { "collectors.$[collector].customers.$[customer].discountPercent": discountPercent } },
+      { arrayFilters: [{ "collector._id": req.params.collectorId }, { "customer._id": req.params.customerId }], returnDocument: "after" },
+    ).lean();
+    if (!dealer) throw new HttpError(404, "ไม่พบลูกค้า");
+    res.json(pubDealer(dealer));
+  });
+
   return r;
 }

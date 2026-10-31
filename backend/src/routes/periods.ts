@@ -23,5 +23,12 @@ export function periodsRouter() {
     res.status(201).json({ ...pubPeriod((await Period.create({ _id: id, lottery, drawDate })).toObject()), status: "pending" });
   });
 
+  r.patch("/:id/limited-numbers", async (req, res) => {
+    const { numbers } = parse(z.object({ numbers: z.array(z.string().regex(/^\d{1,3}$/)).max(200) }), req.body);
+    const period = await Period.findByIdAndUpdate(req.params.id, { $set: { limitedNumbers: [...new Set(numbers)] } }, { returnDocument: "after" }).lean();
+    if (!period) throw new HttpError(404, "ไม่พบงวด");
+    res.json(pubPeriod(period));
+  });
+
   return r;
 }

@@ -7,12 +7,14 @@ export interface Period {
   /** YYYY-MM-DD */
   drawDate: string;
   status: "confirmed" | "pending";
+  limitedNumbers?: string[];
 }
 
 export interface Customer {
   id: string;
   code: string;
   name: string;
+  discountPercent?: number;
 }
 
 export interface Collector {
@@ -48,6 +50,9 @@ export interface Bill {
   periodId: string;
   /** ผลรวมของ lines */
   amount: number;
+  grossAmount?: number;
+  discountPercent?: number;
+  discountAmount?: number;
   lines: BetLine[];
   /** เงินรางวัล คำนวณจากผลรางวัลของงวด (0 ถ้ายังไม่มีผล) */
   prize: number;

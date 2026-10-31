@@ -6,6 +6,7 @@ export const fetchDealers = () => api<Dealer[]>("/dealers");
 
 /** งวดที่มีผลรางวัลแล้ว = ยืนยันผลแล้ว */
 export const fetchPeriods = () => api<Period[]>("/periods");
+export const updateLimitedNumbers = (periodId: string, numbers: string[]) => api<Period>(`/periods/${periodId}/limited-numbers`, { method: "PATCH", body: { numbers } });
 
 export const fetchLedger = (filter: LedgerFilter) =>
   api<Ledger>("/ledger", { query: { lottery: filter.lottery, periodId: filter.periodId ?? undefined, from: filter.from || undefined, to: filter.to || undefined } });
@@ -13,6 +14,8 @@ export const fetchLedger = (filter: LedgerFilter) =>
 /** คืนเจ้ามือที่อัปเดตแล้ว (รวมลูกค้าใหม่) */
 export const createCustomer = (dealerId: string, collectorId: string, name: string) =>
   api<Dealer>(`/dealers/${dealerId}/collectors/${collectorId}/customers`, { method: "POST", body: { name } });
+export const updateCustomerDiscount = (dealerId: string, collectorId: string, customerId: string, discountPercent: number) =>
+  api<Dealer>(`/dealers/${dealerId}/collectors/${collectorId}/customers/${customerId}`, { method: "PATCH", body: { discountPercent } });
 
 export interface NewBill {
   collectorId: string;
@@ -20,6 +23,8 @@ export interface NewBill {
   periodId: string;
   lines: BetLine[];
   paid?: boolean;
+  discountPercent?: number;
+  paidAmount?: number;
 }
 export const createBill = (bill: NewBill) => api<Omit<Bill, "prize" | "rates">>("/bills", { method: "POST", body: bill });
 

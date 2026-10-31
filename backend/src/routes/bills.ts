@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { HttpError, parse } from "../middleware/http";
-import { Activity, Bill, Dealer, Period, nextSeq } from "../models";
+import { Activity, Bill, Dealer, Payment, Period, nextSeq } from "../models";
 import { pubBill } from "../serialize";
 import { BET_LABEL } from "../shared/prize-calc";
 
@@ -22,6 +22,8 @@ const createBody = z.object({
   lines: z.array(line).min(1, "ต้องมีอย่างน้อย 1 รายการ").max(500),
   /** true = รับเงินครบแล้วตอนคีย์ (ไม่มียอดค้าง) */
   paid: z.boolean().default(false),
+  discountPercent: z.number().min(0).max(100).default(0),
+  paidAmount: z.number().min(0).max(100_000_000).default(0),
 });
 
 export function billsRouter() {
@@ -45,7 +47,11 @@ export function billsRouter() {
     const customer = body.customerId ? collector.customers.find((c) => c._id === body.customerId) : null;
     if (body.customerId && !customer) throw new HttpError(400, "ไม่พบลูกค้าในผู้ส่งโพยนี้");
 
-    const amount = body.lines.reduce((s, l) => s + l.amount, 0);
+    const grossAmount = body.lines.reduce((s, l) => s + l.amount, 0);
+    const discountAmount = Math.round(grossAmount * body.discountPercent) / 100;
+    const amount = Math.round((grossAmount - discountAmount) * 100) / 100;
+    const paidAmount = body.paid ? amount : body.paidAmount;
+    if (paidAmount > amount) throw new HttpError(400, "ยอดที่จ่ายเกินยอดสุทธิของบิล");
     const seq = await nextSeq("bill");
     // เลขบิลใช้ปี พ.ศ. ตามข้อมูลตั้งต้น (B-2569-0001)
     const year = Number(period.drawDate.slice(0, 4)) + 543;
@@ -56,16 +62,28 @@ export function billsRouter() {
       lottery: period.lottery,
       periodId: body.periodId,
       amount,
+      grossAmount,
+      discountPercent: body.discountPercent,
+      discountAmount,
       lines: body.lines,
-      // โพยตัวเองของผู้ส่งโพยไม่มียอดค้าง
-      outstanding: body.paid || !customer ? 0 : amount,
+      outstanding: Math.round((amount - paidAmount) * 100) / 100,
     });
-    await Activity.create({
-      actor: req.user?.name ?? "-",
-      text: `คีย์โพย${customer?.name ?? collector.name} จำนวน ${amount.toLocaleString("th-TH")} บาท`,
-      collectorId: body.collectorId,
-      lottery: period.lottery,
-    });
+    try {
+      if (paidAmount > 0) await Payment.create({ collectorId: body.collectorId, customerId: body.customerId, lottery: period.lottery, periodId: period._id, direction: "in", amount: paidAmount, note: `รับเงินตอนคีย์บิล ${bill.no}`, recorded: true });
+    } catch (error) {
+      await Bill.deleteOne({ _id: bill._id });
+      throw error;
+    }
+    try {
+      await Activity.create({
+        actor: req.user?.name ?? "-",
+        text: `คีย์โพย${customer?.name ?? collector.name} จำนวน ${amount.toLocaleString("th-TH")} บาท`,
+        collectorId: body.collectorId,
+        lottery: period.lottery,
+      });
+    } catch (error) {
+      console.error("บันทึกกิจกรรมของบิลไม่สำเร็จ", bill.no, error);
+    }
     res.status(201).json(pubBill(bill.toObject()));
   });
 

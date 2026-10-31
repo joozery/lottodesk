@@ -85,8 +85,9 @@ export function BillDetailPanel({ view, onClose }: { view: BillView; onClose?: (
         </ul>
         <div className="flex justify-between border-t border-slate-200 px-3.5 py-2 text-sm font-semibold">
           <span>รวม ({formatNumber(bill.lines.length)} รายการ)</span>
-          <span className="tabular-nums">{baht(bill.amount)}</span>
+          <span className="tabular-nums">{baht(bill.grossAmount ?? bill.amount)}</span>
         </div>
+        {(bill.discountAmount ?? 0) > 0 && <div className="flex justify-between border-t border-slate-100 px-3.5 py-2 text-sm"><span>ส่วนลด {bill.discountPercent}%</span><span className="tabular-nums">− {baht(bill.discountAmount ?? 0)}</span></div>}
         {confirmed && (
           <div className="flex justify-between border-t border-slate-100 px-3.5 py-2 text-sm">
             <span className="text-slate-500">เงินรางวัล</span>

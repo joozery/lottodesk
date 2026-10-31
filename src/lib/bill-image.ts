@@ -145,7 +145,7 @@ export async function renderBillImage(view: BillView): Promise<Blob> {
   y += 8;
   font(600, 28);
   text(`รวม (${formatNumber(bill.lines.length)} รายการ)`, PAD + 24, y + 34, "left", C.muted);
-  text(baht(bill.amount), W - PAD - 24, y + 34, "right", C.ink);
+  text(baht(bill.grossAmount ?? bill.amount), W - PAD - 24, y + 34, "right", C.ink);
   y += 52 + 8;
   roundRect(ctx, PAD, y, W - PAD * 2, 88, 18, C.navy);
   font(600, 32);
@@ -177,7 +177,7 @@ export function billSummaryText(view: BillView) {
     `บิล ${bill.no} · ${lotteryLabel[bill.lottery]} งวด ${period ? formatDate(period.drawDate) : "-"}`,
     `เจ้าของโพย ${view.customer} (ผู้ส่งโพย ${view.collector} · เจ้ามือ ${view.dealer})`,
     ...shown,
-    `ยอดสุทธิ ${baht(bill.amount)} · ${PAYMENT_LABEL[paymentStatusOf(bill)]} (รับแล้ว ${baht(bill.amount - bill.outstanding)} · ค้าง ${baht(bill.outstanding)})`,
+    `ยอดเลข ${baht(bill.grossAmount ?? bill.amount)} · ส่วนลด ${bill.discountPercent ?? 0}% · ยอดสุทธิ ${baht(bill.amount)} · ${PAYMENT_LABEL[paymentStatusOf(bill)]} (รับแล้ว ${baht(bill.amount - bill.outstanding)} · ค้าง ${baht(bill.outstanding)})`,
   ].join("\n");
 }
 
