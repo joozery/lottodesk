@@ -57,9 +57,10 @@ export function DealersCustomersPage() {
   const periodMap = new Map((periods ?? []).map((p) => [p.id, p]));
 
   const owner = dealers?.find((d) => d.collectors.some((c) => c.id === selectedCollectorId)) ?? dealers?.[0];
-  const selection = owner
-    ? { dealer: owner, collector: owner.collectors.find((c) => c.id === selectedCollectorId) ?? owner.collectors[0] }
-    : null;
+  const ownerCollector = owner ? owner.collectors.find((c) => c.id === selectedCollectorId) ?? owner.collectors[0] : undefined;
+  // เจ้ามือที่เพิ่งสร้างอาจยังไม่มีผู้รวบรวมโพย → ไม่มี selection (กันหน้าพัง) แต่ยังเพิ่มผู้รวบรวมโพยได้
+  const selection = owner && ownerCollector ? { dealer: owner, collector: ownerCollector } : null;
+  const emptyDealer = owner && !ownerCollector ? owner : null;
 
   const bills = ledger?.bills ?? null;
   const summary = selection && bills ? groupSummary(selection.collector.id, bills, periodMap) : null;
@@ -124,7 +125,7 @@ export function DealersCustomersPage() {
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" onClick={() => setDealerOpen(true)}><Plus /> เพิ่มเจ้ามือ</Button>
-              <Button variant="outline" onClick={() => setCollectorOpen(true)} disabled={!selection}><Plus /> เพิ่มผู้รวบรวมโพย</Button>
+              <Button variant="outline" onClick={() => setCollectorOpen(true)} disabled={!selection && !emptyDealer}><Plus /> เพิ่มผู้รวบรวมโพย</Button>
               <Button asChild><Link href="/entry"><Plus /> คีย์โพยใหม่</Link></Button>
             </div>
           </div>
@@ -146,7 +147,7 @@ export function DealersCustomersPage() {
 
             <div className="flex min-w-0 flex-col gap-4">
               <Button variant="outline" className="h-auto justify-between py-2.5 xl:hidden" onClick={() => setTreeOpen(true)}>
-                <span>เจ้ามือ: {selection ? `${selection.dealer.name} → ${selection.collector.name}` : "กำลังโหลด..."}</span>
+                <span>เจ้ามือ: {selection ? `${selection.dealer.name} → ${selection.collector.name}` : emptyDealer ? `${emptyDealer.name} (ยังไม่มีผู้รวบรวมโพย)` : "กำลังโหลด..."}</span>
                 <ChevronDown />
               </Button>
 
@@ -154,6 +155,7 @@ export function DealersCustomersPage() {
                 <ErrorState onRetry={() => setNonce((n) => n + 1)}>โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง</ErrorState>
               ) : (
                 <div className={cn("flex flex-col gap-4 transition-opacity", refreshing && "pointer-events-none opacity-60")} aria-busy={refreshing}>
+                  {emptyDealer && !selection && <p className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">เจ้ามือ {emptyDealer.name} ยังไม่มีผู้รวบรวมโพย กด “เพิ่มผู้รวบรวมโพย” ด้านบนเพื่อเริ่มต้น</p>}
                   {selection && (
                     <CollectorProfile
                       dealer={selection.dealer}
@@ -203,9 +205,9 @@ export function DealersCustomersPage() {
       />
 
       <AddDealerDialog open={dealerOpen} onOpenChange={setDealerOpen} onSaved={refresh} />
+      {(selection ?? emptyDealer) && <AddCollectorDialog open={collectorOpen} onOpenChange={setCollectorOpen} dealer={(selection?.dealer ?? emptyDealer)!} onSaved={refresh} />}
       {selection && (
         <>
-          <AddCollectorDialog open={collectorOpen} onOpenChange={setCollectorOpen} dealer={selection.dealer} onSaved={refresh} />
           <EditCollectorDialog open={editOpen} onOpenChange={setEditOpen} dealer={selection.dealer} collector={selection.collector} onSaved={refresh} />
           <AddCustomerDialog open={addOpen} onOpenChange={setAddOpen} dealer={selection.dealer} collector={selection.collector} onSaved={refresh} />
         </>

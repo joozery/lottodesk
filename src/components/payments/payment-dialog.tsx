@@ -33,10 +33,19 @@ interface Props {
 }
 
 export function PaymentDialog({ open, onOpenChange, ...body }: Props) {
+  // เจ้ามือที่ยังไม่มีผู้รวบรวมโพยเลือกไม่ได้ (ฟอร์มต้องมีผู้รวบรวมโพย)
+  const dealers = body.dealers.filter((d) => d.collectors.length > 0);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* mount เฉพาะตอนเปิด เพื่อรีเซ็ตฟอร์มทุกครั้ง */}
-      <DialogContent>{open && <PaymentForm onClose={() => onOpenChange(false)} {...body} />}</DialogContent>
+      <DialogContent>
+        {open && (dealers.length ? <PaymentForm onClose={() => onOpenChange(false)} {...body} dealers={dealers} /> : (
+          <>
+            <DialogTitle>บันทึกรับ–จ่ายเงิน</DialogTitle>
+            <DialogDescription>ยังไม่มีผู้รวบรวมโพย เพิ่มผู้รวบรวมโพยได้ที่หน้าเจ้ามือและลูกค้าก่อน</DialogDescription>
+          </>
+        ))}
+      </DialogContent>
     </Dialog>
   );
 }
@@ -166,13 +175,13 @@ function PaymentForm({ direction, dealers, outstanding, defaults, lottery, onSav
         <Info className="mt-0.5 size-4 shrink-0" />
         <span>
           {reducesDebt
-            ? "ระบบจะหักยอดค้างชำระของลูกค้ารายนี้ (ตัดบิลเก่าสุดก่อน) รายการจะถูกเก็บไว้ในเบราว์เซอร์นี้เท่านั้น ยังไม่ซิงก์กับเครื่องอื่นหรือระบบกลาง"
-            : "รายการจะถูกเก็บไว้ในเบราว์เซอร์นี้เท่านั้น ยังไม่ซิงก์กับเครื่องอื่นหรือระบบกลาง"}
+            ? "ระบบจะหักยอดค้างชำระของลูกค้ารายนี้ โดยตัดบิลเก่าสุดก่อน"
+            : "บันทึกรายการรับ–จ่ายเงินและตรวจสอบย้อนหลังได้ในหน้านี้"}
         </span>
       </div>
       {failed && (
         <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
-          บันทึกไม่สำเร็จ เบราว์เซอร์ไม่อนุญาตให้เก็บข้อมูล (เช่น โหมดส่วนตัว) กรุณาลองใหม่
+          บันทึกไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่
         </p>
       )}
 
