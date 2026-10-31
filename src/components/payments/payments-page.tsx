@@ -66,7 +66,7 @@ export function PaymentsPage() {
     // ถ้ารายการที่บันทึกอยู่นอกช่วงที่ดู ให้ขยายช่วงให้เห็นรายการนั้น
     setRange((r) => ({ from: day < r.from ? day : r.from, to: day > r.to ? day : r.to }));
     setNotice(
-      `${p.direction === "in" ? "บันทึกรับเงิน" : "บันทึกจ่ายเงิน"} ${formatBaht(p.amount)} แล้ว (เก็บในเบราว์เซอร์นี้)` +
+      `${p.direction === "in" ? "บันทึกรับเงิน" : "บันทึกจ่ายเงิน"} ${formatBaht(p.amount)} แล้ว` +
         (p.direction === "in" && p.customerId ? " และหักยอดค้างชำระของลูกค้าแล้ว" : ""),
     );
     setNonce((n) => n + 1);

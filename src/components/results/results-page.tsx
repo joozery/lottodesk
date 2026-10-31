@@ -103,7 +103,7 @@ export function ResultsPage() {
             <div className="flex min-w-0 flex-col gap-5">
               {saved && (
                 <div role="status" className="rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-                  บันทึกผลรางวัลแล้ว (เก็บในเบราว์เซอร์นี้) เงินรางวัลของทุกบิลในงวดนี้คำนวณใหม่ตามเลขที่กรอก
+                  บันทึกผลรางวัลแล้ว เงินรางวัลของทุกบิลในงวดนี้คำนวณใหม่ตามเลขที่กรอก
                 </div>
               )}
               <PrizeBoard period={period} result={prize.loading ? undefined : prize.data} />
