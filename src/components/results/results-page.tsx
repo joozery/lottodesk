@@ -34,7 +34,7 @@ export function ResultsPage() {
     const valid = all.some((p) => p.id === periodChoice && p.lottery === lottery);
     const periodId = valid ? periodChoice : defaultPeriodId(all, lottery);
     return periodId ? { lottery, periodId, ...EMPTY_RANGE } : null;
-  });
+  }, () => ({ lottery, periodId: periodChoice ?? "default", ...EMPTY_RANGE }));
   const periodId = data.filter?.periodId ?? null;
   const period = data.periods?.find((p) => p.id === periodId) ?? null;
 

@@ -126,7 +126,8 @@ export function EntryPage() {
   const customer = customerChoice ? customers.find((c) => c.id === customerChoice) : customers[0];
   const periodOptions = periods.filter((p) => p.lottery === lottery).sort((a, b) => b.drawDate.localeCompare(a.drawDate));
   const period = periodOptions.find((p) => p.id === periodChoice) ?? preferredPeriod(periods, lottery);
-  const ledgerRemote = useRemote(`entry-ledger-${nonce}-${period?.id ?? "none"}`, () => period ? fetchLedger({ lottery, periodId: period.id, from: "", to: "" }) : Promise.resolve({ bills: [], payments: [], activities: [] }));
+  // โหลดบิลของงวดพร้อมกับรายการงวดเลย (ไม่รอ) — "open" ให้เซิร์ฟเวอร์เลือกงวดที่เปิดรับอยู่ให้ตรงกับ preferredPeriod
+  const ledgerRemote = useRemote(`entry-ledger-${nonce}-${lottery}-${periodChoice ?? "open"}`, () => fetchLedger({ lottery, periodId: periodChoice ?? "open", from: "", to: "" }));
   const open = !!period && period.status === "pending" && period.drawDate >= localDate();
   const prefix = [lottery, period?.id ?? "", dealer?.id ?? "", collector?.id ?? "", customer?.id ?? ""].join("|");
   const key = sheetKey(lottery, period?.id ?? "", dealer?.id ?? "", collector?.id ?? "", customer?.id ?? "", sheet);

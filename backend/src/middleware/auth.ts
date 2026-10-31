@@ -19,7 +19,12 @@ export const toAuthUser = (u: { _id: string; name: string; email: string; role?:
   return { id: u._id, name: u.name, email: u.email, role, permissions };
 };
 
-/** อ่านสิทธิ์จาก DB ทุกครั้ง เพื่อให้การเปลี่ยนสิทธิ์/ปิดบัญชีมีผลทันที */
+/** จำผู้ใช้ไว้ในหน่วยความจำสั้น ๆ เพื่อลดการถาม DB ต่อทุก request; ล้างทันทีเมื่อแก้/ลบผู้ใช้ (ในเครื่องเดียวกัน) และหมดอายุเองใน 15 วินาที */
+const AUTH_TTL_MS = 15_000;
+const authCache = new Map<string, { user: AuthUser; exp: number }>();
+export const clearAuthCache = () => authCache.clear();
+
+/** อ่านสิทธิ์จาก DB (จำไว้ ${AUTH_TTL_MS / 1000} วินาที) เพื่อให้การเปลี่ยนสิทธิ์/ปิดบัญชีมีผลภายในเวลาสั้น ๆ */
 export function requireAuth(secret: string) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const bearer = req.headers.authorization?.startsWith("Bearer ") ? req.headers.authorization.slice(7) : undefined;
@@ -32,9 +37,12 @@ export function requireAuth(secret: string) {
       res.status(401).json({ error: "เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่" });
       return;
     }
+    const cached = authCache.get(id);
+    if (cached && cached.exp > Date.now()) { req.user = cached.user; next(); return; }
     const user = await User.findById(id).lean();
-    if (!user || user.active === false) { res.status(401).json({ error: "บัญชีนี้ใช้งานไม่ได้" }); return; }
+    if (!user || user.active === false) { authCache.delete(id); res.status(401).json({ error: "บัญชีนี้ใช้งานไม่ได้" }); return; }
     req.user = toAuthUser(user);
+    authCache.set(id, { user: req.user, exp: Date.now() + AUTH_TTL_MS });
     next();
   };
 }

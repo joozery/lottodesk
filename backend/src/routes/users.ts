@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { z } from "zod";
 import { HttpError, parse } from "../middleware/http";
+import { clearAuthCache } from "../middleware/auth";
 import { User } from "../models";
 import { PERMISSION_KEYS } from "../permissions";
 
@@ -65,6 +66,7 @@ export function usersRouter() {
     const { password: newPassword, ...rest } = b;
     const update = { ...rest, ...(newPassword ? { passwordHash: await bcrypt.hash(newPassword, 12) } : {}) };
     const user = await User.findByIdAndUpdate(id, update, { returnDocument: "after" }).lean();
+    clearAuthCache();
     res.json(pubUser(user!));
   });
 
@@ -75,6 +77,7 @@ export function usersRouter() {
     if (!target) throw new HttpError(404, "ไม่พบผู้ใช้");
     if ((target.role ?? "admin") === "admin" && target.active !== false && (await otherActiveAdmins(id)) === 0) throw new HttpError(400, "ต้องเหลือผู้ดูแลระบบอย่างน้อย 1 คน");
     await User.deleteOne({ _id: id });
+    clearAuthCache();
     res.status(204).end();
   });
 

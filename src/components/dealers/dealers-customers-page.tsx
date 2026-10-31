@@ -50,7 +50,7 @@ export function DealersCustomersPage() {
     const valid = all.some((p) => p.id === periodChoice && p.lottery === lottery);
     const periodId = valid ? periodChoice : defaultPeriodId(all, lottery);
     return periodId ? { lottery, periodId, ...range } : null;
-  });
+  }, () => (lottery === "all" ? { lottery, periodId: null, ...range } : { lottery, periodId: periodChoice ?? "default", ...range }));
   const effectivePeriodId = data.filter?.periodId ?? null;
 
   const { dealers, periods, ledger } = data;
