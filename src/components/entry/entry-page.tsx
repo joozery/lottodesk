@@ -10,8 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/state-panels";
 import { useRemote } from "@/hooks/use-remote";
+import { DEFAULT_DISCOUNT, tierDiscountPercent } from "@/lib/discount";
 import { formatDate, formatNumber } from "@/lib/format";
+import { BET_LABEL } from "@/lib/prize-calc";
 import type { BetLine, Lottery, Period } from "@/lib/types";
+import { fetchDiscountTier } from "@/services/risk-service";
 import { createBill, createCollector, createCustomer, fetchDealers, fetchLedger, fetchPeriods, updateCustomerDiscount, updateLimitedNumbers } from "@/services/dealers-service";
 
 type EntryType = "2" | "3" | "run";
@@ -131,7 +134,10 @@ export function EntryPage() {
   const totals = amountsFor(rows);
   const allRows = Object.entries(sheets).filter(([k]) => k.startsWith(`${prefix}|`)).flatMap(([, value]) => value);
   const allTotals = amountsFor(allRows);
-  const discountPercent = Number(discountInput ?? customer?.discountPercent ?? 0);
+  const { data: discountTier } = useRemote("entry-discount-tier", fetchDiscountTier);
+  // ส่วนลดตั้งต้น: ถ้าลูกค้ามีส่วนลดที่บันทึกไว้ใช้ค่านั้น ไม่เช่นนั้นคิดตามยอดบิล (เกณฑ์ตั้งได้ที่ ตั้งค่า > วงเงินรับ); พิมพ์แก้เองได้
+  const autoDiscount = customer?.discountPercent ? customer.discountPercent : tierDiscountPercent(totals.total, discountTier ?? DEFAULT_DISCOUNT);
+  const discountPercent = Number(discountInput ?? autoDiscount);
   const discountAmount = Math.round(totals.total * discountPercent) / 100;
   const netAmount = Math.round((totals.total - discountAmount) * 100) / 100;
   const paidAmount = Number(paidInput || 0);
@@ -255,7 +261,8 @@ export function EntryPage() {
       setNonce((n) => n + 1);
       // ล้างแผ่นที่ส่งแล้ว ทั้งในหน้าจอและที่บันทึกร่างไว้ในเบราว์เซอร์
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); setSavedSheets(next); } catch { /* ร่างในเบราว์เซอร์ไม่สำคัญเท่าบิลที่ส่งสำเร็จแล้ว */ }
-      setNotice(`บันทึกบิล ${bill.no} ยอดสุทธิ ${money(bill.amount)} · รับแล้ว ${money(paidAmount)} · ค้าง ${money(bill.outstanding)}`);
+      const warn = (bill.warnings ?? []).map((w) => `${w.number} ${BET_LABEL[w.type]} ซื้อรวม ${money(w.total)} เกินวงเงิน ${money(w.excess)}`);
+      setNotice(`บันทึกบิล ${bill.no} ยอดสุทธิ ${money(bill.amount)} · รับแล้ว ${money(paidAmount)} · ค้าง ${money(bill.outstanding)}${warn.length ? ` ⚠ เกินวงเงิน: ${warn.join(", ")} (ไปที่หน้า ยอดซื้อ/ตีออก)` : ""}`);
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "ส่งบิลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
     } finally {
@@ -397,7 +404,7 @@ export function EntryPage() {
               <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h2 className="font-bold text-[#102356]">2. ส่วนลดของ {customer?.name ?? "ลูกค้า"}</h2>
                 <p className="mt-1 text-xs text-slate-500">บันทึกเป็นค่าเริ่มต้นของลูกค้าย่อยรายนี้ และใช้กับบิลปัจจุบัน</p>
-                <div className="mt-2 flex items-center gap-2"><Input type="number" min="0" max="100" step="0.01" value={discountInput ?? String(customer?.discountPercent ?? 0)} onChange={(e) => setDiscountInput(e.target.value)} aria-label="ส่วนลดเปอร์เซ็นต์" className="min-w-0 flex-1 sm:max-w-36" /><span className="text-sm">%</span><Button variant="outline" onClick={() => void saveDiscount()} disabled={savingSettings || !customer || discountInput === null}>บันทึก<span className="hidden sm:inline">ให้ลูกค้า</span></Button></div>
+                <div className="mt-2 flex items-center gap-2"><Input type="number" min="0" max="100" step="0.01" value={discountInput ?? String(autoDiscount)} onChange={(e) => setDiscountInput(e.target.value)} aria-label="ส่วนลดเปอร์เซ็นต์" className="min-w-0 flex-1 sm:max-w-36" /><span className="text-sm">%</span><Button variant="outline" onClick={() => void saveDiscount()} disabled={savingSettings || !customer || discountInput === null}>บันทึก<span className="hidden sm:inline">ให้ลูกค้า</span></Button></div>
               </section>
             </div>
 

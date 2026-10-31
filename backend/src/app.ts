@@ -14,6 +14,7 @@ import { paymentsRouter } from "./routes/payments";
 import { periodsRouter } from "./routes/periods";
 import { prizeResultsRouter } from "./routes/prize-results";
 import { ratesRouter } from "./routes/rates";
+import { riskRouter } from "./routes/risk";
 import { usersRouter } from "./routes/users";
 
 export function createApp(config: Config) {
@@ -38,6 +39,7 @@ export function createApp(config: Config) {
   api.use("/payments", requireWrite("payments"), paymentsRouter());
   api.use("/prize-results", requireWrite("results"), prizeResultsRouter());
   api.use("/rates", requireWrite("settings"), ratesRouter());
+  api.use("/risk", requireWrite("bills", "settings", "entry"), riskRouter());
   api.use("/users", requireAdmin, usersRouter());
   api.use(() => { throw new HttpError(404, "ไม่พบ endpoint นี้"); });
 

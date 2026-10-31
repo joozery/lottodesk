@@ -4,6 +4,7 @@ import { HttpError, parse } from "../middleware/http";
 import { Activity, Bill, Dealer, Payment, Period, nextSeq } from "../models";
 import { pubBill } from "../serialize";
 import { BET_LABEL } from "../shared/prize-calc";
+import { computeExposure, normNumber } from "../services/risk";
 
 const DIGITS = { top3: 3, tod3: 3, bottom3: 3, top2: 2, bottom2: 2, runTop: 1, runBottom: 1 } as const;
 const line = z.object({
@@ -84,7 +85,16 @@ export function billsRouter() {
     } catch (error) {
       console.error("บันทึกกิจกรรมของบิลไม่สำเร็จ", bill.no, error);
     }
-    res.status(201).json(pubBill(bill.toObject()));
+    // เตือนเลขที่เกินวงเงิน (ยังรับบิลตามปกติ)
+    let warnings: unknown[] = [];
+    try {
+      const exposure = await computeExposure(body.periodId);
+      const mine = new Set(body.lines.map((l) => `${l.type}:${normNumber(l.type, l.number)}`));
+      warnings = exposure.rows.filter((x) => x.excess > 0 && x.limit !== null && mine.has(`${x.type}:${x.number}`)).map((x) => ({ type: x.type, number: x.number, total: x.total, limit: x.limit, excess: x.excess }));
+    } catch (error) {
+      console.error("คำนวณยอดเกินวงเงินไม่สำเร็จ", bill.no, error);
+    }
+    res.status(201).json({ ...pubBill(bill.toObject()), warnings });
   });
 
   return r;

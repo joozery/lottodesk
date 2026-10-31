@@ -7,7 +7,7 @@ import { useAuth } from "@/components/auth/auth-provider";
 import type { ComponentType } from "react";
 import { Settings } from "@/components/icons";
 import { Avatar } from "@/components/ui/avatar";
-import { ADMIN_ITEM, NAV_GROUPS, SETTINGS_ITEM } from "@/config/nav";
+import { ADMIN_ITEM, isNavActive, NAV_GROUPS, SETTINGS_ITEM } from "@/config/nav";
 import { canAccessPath } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,7 @@ function NavItem({ label, href, icon: Icon, onNavigate }: {
   icon: ComponentType<{ className?: string }>;
   onNavigate?: () => void;
 }) {
-  const active = usePathname().startsWith(href);
+  const active = isNavActive(usePathname(), href);
   return (
     <Link
       href={href}

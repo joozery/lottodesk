@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/settings/rates", label: "อัตราจ่าย" },
+  { href: "/settings/limits", label: "วงเงินรับ/ส่วนลด" },
   { href: "/settings/line", label: "LINE" },
 ] as const;
 

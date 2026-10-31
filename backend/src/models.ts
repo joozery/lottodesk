@@ -102,3 +102,21 @@ export async function nextSeq(name: string): Promise<number> {
   const c = await Counter.findOneAndUpdate({ _id: name }, { $inc: { seq: 1 } }, { upsert: true, returnDocument: "after" });
   return c.seq;
 }
+
+/** ตั้งค่าทั่วระบบแบบ key–value เช่น วงเงินรับต่อเลข (key "limits") */
+export const AppSetting = defineModel("AppSetting", new Schema({ _id: String, value: { type: Schema.Types.Mixed, default: {} } }));
+
+/** แผ่นตีออก: ยอดส่วนเกินที่ส่งต่อให้เจ้ามือรายอื่นรับแทน (1 แผ่นมีหลายเลข) */
+export const LayOff = defineModel("LayOff", new Schema({
+  _id: id(),
+  no: { type: String, required: true, unique: true },
+  periodId: { type: String, required: true, index: true },
+  lottery,
+  /** ชื่อเจ้ามือ/ผู้รับตีออก */
+  target: { type: String, default: "" },
+  note: { type: String, default: "" },
+  lines: { type: [lineSchema], required: true },
+  total: { type: Number, required: true },
+  actor: { type: String, default: "-" },
+  at: { type: Date, default: () => new Date(), index: true },
+}));

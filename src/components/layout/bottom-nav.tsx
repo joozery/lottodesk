@@ -6,7 +6,7 @@ import { useState, type ComponentType } from "react";
 import { Ellipsis, Settings } from "@/components/icons";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/components/auth/auth-provider";
-import { ADMIN_ITEM, NAV_GROUPS, SETTINGS_ITEM } from "@/config/nav";
+import { ADMIN_ITEM, isNavActive, NAV_GROUPS, SETTINGS_ITEM } from "@/config/nav";
 import { canAccessPath } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +30,7 @@ export function BottomNav() {
   const PRIMARY = allowed.filter((i) => PRIMARY_HREFS.includes(i.href));
   const MORE = allowed.filter((i) => !PRIMARY_HREFS.includes(i.href));
   const [moreOpen, setMoreOpen] = useState(false);
-  const moreActive = MORE.some((i) => pathname.startsWith(i.href));
+  const moreActive = MORE.some((i) => isNavActive(pathname, i.href));
 
   return (
     <>
@@ -39,7 +39,7 @@ export function BottomNav() {
         className="fixed inset-x-0 bottom-0 z-40 flex border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur xl:hidden"
       >
         {PRIMARY.map(({ href, label, icon: Icon }) => {
-          const active = pathname.startsWith(href);
+          const active = isNavActive(pathname, href);
           return (
             <Link key={href} href={href} aria-current={active ? "page" : undefined} className={cn(tab, active ? "text-blue-600" : "text-slate-500")}>
               <Icon className={cn("size-6", active && "stroke-[2.4]")} />
@@ -61,7 +61,7 @@ export function BottomNav() {
           </div>
           <ul className="grid grid-cols-2 gap-2 p-4 pt-2">
             {MORE.map(({ href, label, icon: Icon }) => {
-              const active = pathname.startsWith(href);
+              const active = isNavActive(pathname, href);
               return (
                 <li key={href}>
                   <Link

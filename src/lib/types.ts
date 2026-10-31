@@ -101,3 +101,51 @@ export interface LedgerFilter {
   from: string;
   to: string;
 }
+
+/** วงเงินรับสูงสุดต่อเลข แยกตามประเภท (ไม่ตั้ง = ไม่จำกัด) */
+export type Limits = Partial<Record<BetType, number>>;
+
+export interface NumberExposure {
+  type: BetType;
+  number: string;
+  /** ยอดซื้อรวมของเลขนี้ในงวด */
+  total: number;
+  limit: number | null;
+  /** ยอดที่เกินวงเงิน (ก่อนหักที่ตีออก) */
+  over: number;
+  laidOff: number;
+  /** ยอดที่เรารับเอง = ยอดซื้อ − ตีออก */
+  retained: number;
+  /** ยอดที่ยังเกินวงเงินอยู่หลังหักที่ตีออกแล้ว */
+  excess: number;
+}
+
+export interface LayoffSheet {
+  id: string;
+  no: string;
+  periodId: string;
+  lottery: Lottery;
+  target: string;
+  note: string;
+  lines: BetLine[];
+  total: number;
+  actor: string;
+  at: string;
+}
+
+export interface Exposure {
+  limits: Limits;
+  rows: NumberExposure[];
+  sheets: LayoffSheet[];
+  totalBought: number;
+  totalLaidOff: number;
+}
+
+/** แจ้งเตือนตอนคีย์โพยว่าเลขไหนเกินวงเงิน */
+export interface BillWarning {
+  type: BetType;
+  number: string;
+  total: number;
+  limit: number;
+  excess: number;
+}

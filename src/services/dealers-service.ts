@@ -1,5 +1,5 @@
 // Service เจ้ามือ งวด และ ledger — เรียก API จริง
-import type { BetLine, Bill, Dealer, Ledger, LedgerFilter, Period } from "@/lib/types";
+import type { BetLine, Bill, BillWarning, Dealer, Ledger, LedgerFilter, Period } from "@/lib/types";
 import { api } from "./api";
 
 export const fetchDealers = () => api<Dealer[]>("/dealers");
@@ -26,7 +26,7 @@ export interface NewBill {
   discountPercent?: number;
   paidAmount?: number;
 }
-export const createBill = (bill: NewBill) => api<Omit<Bill, "prize" | "rates">>("/bills", { method: "POST", body: bill });
+export const createBill = (bill: NewBill) => api<Omit<Bill, "prize" | "rates"> & { warnings?: BillWarning[] }>("/bills", { method: "POST", body: bill });
 
 export const createDealer = (name: string) => api<Dealer>("/dealers", { method: "POST", body: { name } });
 
