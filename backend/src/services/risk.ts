@@ -53,11 +53,22 @@ export async function computeExposure(periodId: string): Promise<Exposure> {
   return { limits, rows, sheets: sheets.map(pubLayoff), totalBought: sum(bought.values()), totalLaidOff: sum(laid.values()) };
 }
 
-/** ส่วนลดอัตโนมัติตามยอดบิล: ต่ำกว่า threshold ลด below% · ตั้งแต่ threshold ขึ้นไปลด atOrAbove% */
-export interface DiscountTier { threshold: number; below: number; atOrAbove: number }
-export const DEFAULT_DISCOUNT: DiscountTier = { threshold: 20_000, below: 25, atOrAbove: 27 };
+/** ส่วนลดตั้งต้นและส่วนลดขั้นบันไดแยกตามประเภทการแทง */
+export interface DiscountTier { threshold: number; percent: number }
+export type DiscountDefaults = Record<BetType, number>;
+export type DiscountTiers = DiscountTier[];
+export interface DiscountConfig { defaults: DiscountDefaults; tiers: DiscountTiers }
+export const DEFAULT_DISCOUNTS: DiscountDefaults = Object.fromEntries(BET_TYPES.map((type) => [type, 0])) as DiscountDefaults;
 
-export async function loadDiscount(): Promise<DiscountTier> {
+export async function loadDiscount(): Promise<DiscountConfig> {
   const doc = await AppSetting.findById("discount").lean();
-  return { ...DEFAULT_DISCOUNT, ...((doc?.value ?? {}) as Partial<DiscountTier>) };
+  const value = (doc?.value ?? {}) as Record<string, unknown>;
+  const rawDefaults = value.defaults && typeof value.defaults === "object" ? value.defaults as Record<string, unknown> : value;
+  const legacyDefault = typeof value.below === "number" ? value.below : 0;
+  const defaults = Object.fromEntries(BET_TYPES.map((type) => [type, typeof rawDefaults[type] === "number" ? rawDefaults[type] : legacyDefault])) as DiscountDefaults;
+  const rawTiers = value.tiers;
+  const legacyTiers = rawTiers && typeof rawTiers === "object" && !Array.isArray(rawTiers) ? rawTiers as Record<string, unknown> : {};
+  const rows = Array.isArray(rawTiers) ? rawTiers : Object.values(legacyTiers).find(Array.isArray) ?? [];
+  const tiers = rows.filter((row): row is DiscountTier => !!row && typeof row === "object" && typeof (row as Record<string, unknown>).threshold === "number" && typeof (row as Record<string, unknown>).percent === "number").sort((a, b) => a.threshold - b.threshold);
+  return { defaults, tiers };
 }

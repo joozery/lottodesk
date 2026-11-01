@@ -1,11 +1,13 @@
 // Service เจ้ามือ งวด และ ledger — เรียก API จริง
-import type { BetLine, Bill, BillWarning, Dealer, Ledger, LedgerFilter, Period } from "@/lib/types";
+import type { BetLine, Bill, BillWarning, Dealer, Ledger, LedgerFilter, Lottery, Period } from "@/lib/types";
 import { api } from "./api";
 
 export const fetchDealers = () => api<Dealer[]>("/dealers");
 
 /** งวดที่มีผลรางวัลแล้ว = ยืนยันผลแล้ว */
 export const fetchPeriods = () => api<Period[]>("/periods");
+export const createPeriod = (lottery: Lottery, drawDate: string) =>
+  api<Period>("/periods", { method: "POST", body: { lottery, drawDate } });
 export const updateLimitedNumbers = (periodId: string, numbers: string[]) => api<Period>(`/periods/${periodId}/limited-numbers`, { method: "PATCH", body: { numbers } });
 
 export const fetchLedger = (filter: LedgerFilter) =>

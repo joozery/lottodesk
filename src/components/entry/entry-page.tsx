@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import Link from "next/link";
 import { ArrowLeftRight, Keyboard, Layers3, Pencil, Plus, Printer, Search, Trash2, Upload } from "@/components/icons";
 import { LotteryFilter } from "@/components/dealers/lottery-filter";
 import { TopBar } from "@/components/layout/top-bar";
@@ -10,12 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/state-panels";
 import { useRemote } from "@/hooks/use-remote";
-import { DEFAULT_DISCOUNT, tierDiscountPercent } from "@/lib/discount";
+import { DEFAULT_DISCOUNT_CONFIG, discountForLinesAtAggregate, normalizeDiscounts } from "@/lib/discount";
 import { formatDate, formatNumber } from "@/lib/format";
 import { BET_LABEL } from "@/lib/prize-calc";
 import type { BetLine, Lottery, Period } from "@/lib/types";
 import { fetchDiscountTier } from "@/services/risk-service";
-import { createBill, createCollector, createCustomer, fetchDealers, fetchLedger, fetchPeriods, updateCustomerDiscount, updateLimitedNumbers } from "@/services/dealers-service";
+import { createBill, createCollector, createCustomer, fetchDealers, fetchLedger, fetchPeriods, updateLimitedNumbers } from "@/services/dealers-service";
 
 type EntryType = "2" | "3" | "run";
 type EntryRow = { id: string; number: string; type: EntryType; top: number; tod: number; bottom: number };
@@ -88,7 +89,6 @@ export function EntryPage() {
   const [newCollector, setNewCollector] = useState("");
   const [addingCollector, setAddingCollector] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [discountInput, setDiscountInput] = useState<string | null>(null);
   const [paidInput, setPaidInput] = useState("");
   const [limitedInput, setLimitedInput] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
@@ -135,11 +135,16 @@ export function EntryPage() {
   const totals = amountsFor(rows);
   const allRows = Object.entries(sheets).filter(([k]) => k.startsWith(`${prefix}|`)).flatMap(([, value]) => value);
   const allTotals = amountsFor(allRows);
+  const collectorPrefix = [lottery, period?.id ?? "", dealer?.id ?? "", collector?.id ?? ""].join("|");
+  const collectorDraftRows = Object.entries(sheets).filter(([k]) => k.startsWith(`${collectorPrefix}|`)).flatMap(([, value]) => value);
   const { data: discountTier } = useRemote("entry-discount-tier", fetchDiscountTier);
   // ส่วนลดตั้งต้น: ถ้าลูกค้ามีส่วนลดที่บันทึกไว้ใช้ค่านั้น ไม่เช่นนั้นคิดตามยอดบิล (เกณฑ์ตั้งได้ที่ ตั้งค่า > วงเงินรับ); พิมพ์แก้เองได้
-  const autoDiscount = customer?.discountPercent ? customer.discountPercent : tierDiscountPercent(totals.total, discountTier ?? DEFAULT_DISCOUNT);
-  const discountPercent = Number(discountInput ?? autoDiscount);
-  const discountAmount = Math.round(totals.total * discountPercent) / 100;
+  const discountConfig = normalizeDiscounts(discountTier ?? DEFAULT_DISCOUNT_CONFIG);
+  const collectorBills = (ledgerRemote.data?.bills ?? []).filter((bill) => bill.collectorId === collector?.id && bill.periodId === period?.id);
+  const collectorExistingLines = collectorBills.flatMap((bill) => bill.lines);
+  const collectorAggregateLines = [...collectorExistingLines, ...linesOf(collectorDraftRows)];
+  const discountAmount = discountForLinesAtAggregate(linesOf(rows), collectorAggregateLines, discountConfig);
+  const discountPercent = totals.total > 0 ? (discountAmount / totals.total) * 100 : 0;
   const netAmount = Math.round((totals.total - discountAmount) * 100) / 100;
   const paidAmount = Number(paidInput || 0);
   const remainingAmount = Math.round((netAmount - paidAmount) * 100) / 100;
@@ -153,10 +158,24 @@ export function EntryPage() {
     .filter((n) => Number.isInteger(n) && n > 0).sort((a, b) => a - b);
   const dirty = JSON.stringify(sheets) !== JSON.stringify(savedSheets);
 
+  if (!dealersRemote.loading && !periodsRemote.loading && !dealersRemote.error && !periodsRemote.error && (!dealer || !period)) {
+    return (
+      <>
+        <TopBar breadcrumb={["คีย์โพยด่วน"]} />
+        <main className="mx-auto w-full max-w-[1700px] flex-1 p-3 sm:p-4">
+          <section className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+            <h1 className="font-bold text-amber-900">ยังไม่มีข้อมูลสำหรับคีย์โพย</h1>
+            <p className="mt-1 text-sm text-amber-800">{!dealer ? "กรุณาเพิ่มเจ้ามือและลูกค้าหลักก่อนเริ่มคีย์โพย" : "กรุณาสร้างงวดที่เปิดรับรายการก่อนเริ่มคีย์โพย"}</p>
+            {!dealer ? <Link href="/dealers" className="mt-4 inline-flex rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">ไปหน้าเจ้ามือและลูกค้า</Link> : <button type="button" onClick={() => setNonce((n) => n + 1)} className="mt-4 rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100">ตรวจสอบอีกครั้ง</button>}
+          </section>
+        </main>
+      </>
+    );
+  }
+
   function chooseCustomer(id: string) {
     setCustomerChoice(id);
     setSheet(1);
-    setDiscountInput(null);
     setPaidInput("");
   }
 
@@ -227,7 +246,7 @@ export function EntryPage() {
     try {
       const updated = await createCollector(dealer.id, name);
       const created = updated.collectors.at(-1);
-      if (created) { setCollectorChoice(created.id); setCustomerChoice(""); setDiscountInput(null); setPaidInput(""); setSheet(1); }
+      if (created) { setCollectorChoice(created.id); setCustomerChoice(""); setPaidInput(""); setSheet(1); }
       setNewCollector("");
       setAddingCollector(false);
       setNonce((n) => n + 1);
@@ -278,14 +297,6 @@ export function EntryPage() {
     setSavingSettings(true);
     try { await updateLimitedNumbers(period.id, numbers); setLimitedInput(null); setNonce((n) => n + 1); setNotice("บันทึกเลขอั้นของงวดนี้แล้ว"); }
     catch (e) { setNotice(e instanceof Error ? e.message : "บันทึกเลขอั้นไม่สำเร็จ"); }
-    finally { setSavingSettings(false); }
-  }
-
-  async function saveDiscount() {
-    if (!dealer || !collector || !customer || !Number.isFinite(discountPercent) || discountPercent < 0 || discountPercent > 100) { setNotice("ส่วนลดต้องอยู่ระหว่าง 0–100%"); return; }
-    setSavingSettings(true);
-    try { await updateCustomerDiscount(dealer.id, collector.id, customer.id, discountPercent); setDiscountInput(null); setNonce((n) => n + 1); setNotice(`บันทึกส่วนลด ${discountPercent}% ให้ ${customer.name} แล้ว`); }
-    catch (e) { setNotice(e instanceof Error ? e.message : "บันทึกส่วนลดไม่สำเร็จ"); }
     finally { setSavingSettings(false); }
   }
 
@@ -364,13 +375,13 @@ export function EntryPage() {
           <>
             <div className="mb-3 grid grid-cols-1 items-end gap-2.5 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2 lg:flex lg:flex-wrap lg:gap-3">
               <label className="min-w-0 flex-1 text-xs font-medium text-slate-500">เจ้ามือ
-                <Select value={dealer.id} onValueChange={(id) => { setDealerChoice(id); const next = dealers.find((d) => d.id === id); setCollectorChoice(next?.collectors[0]?.id ?? ""); setCustomerChoice(next?.collectors[0]?.customers[0]?.id ?? ""); setSheet(1); setDiscountInput(null); setPaidInput(""); }}>
+                <Select value={dealer.id} onValueChange={(id) => { setDealerChoice(id); const next = dealers.find((d) => d.id === id); setCollectorChoice(next?.collectors[0]?.id ?? ""); setCustomerChoice(next?.collectors[0]?.customers[0]?.id ?? ""); setSheet(1); setPaidInput(""); }}>
                   <SelectTrigger className="mt-1" aria-label="เจ้ามือ" />
                   <SelectContent>{dealers.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
                 </Select>
               </label>
               <label className="min-w-0 flex-1 text-xs font-medium text-slate-500">ลูกค้าหลัก / ผู้ส่งโพย
-                <Select value={collector.id} onValueChange={(id) => { setCollectorChoice(id); setCustomerChoice(dealer.collectors.find((c) => c.id === id)?.customers[0]?.id ?? ""); setSheet(1); setDiscountInput(null); setPaidInput(""); }}>
+                <Select value={collector.id} onValueChange={(id) => { setCollectorChoice(id); setCustomerChoice(dealer.collectors.find((c) => c.id === id)?.customers[0]?.id ?? ""); setSheet(1); setPaidInput(""); }}>
                   <SelectTrigger className="mt-1" aria-label="ผู้ส่งโพย" />
                   <SelectContent>{dealer.collectors.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
@@ -401,11 +412,6 @@ export function EntryPage() {
                 <h2 className="font-bold text-[#102356]">1. เลขอั้นงวดนี้</h2>
                 <p className="mt-1 text-xs text-slate-500">ใส่เลขคั่นด้วยเว้นวรรคหรือจุลภาค ระบบจะเตือนเมื่อคีย์ตรงเลขอั้น</p>
                 <div className="mt-2 flex gap-2"><Input value={limitedInput ?? limitedNumbers.join(" ")} onChange={(e) => setLimitedInput(e.target.value)} placeholder="เช่น 12 34 567" aria-label="เลขอั้นงวดนี้" className="min-w-0 flex-1" /><Button variant="outline" onClick={() => void saveLimitedNumbers()} disabled={savingSettings || limitedInput === null}>บันทึก</Button></div>
-              </section>
-              <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h2 className="font-bold text-[#102356]">2. ส่วนลดของ {customer?.name ?? "ลูกค้า"}</h2>
-                <p className="mt-1 text-xs text-slate-500">บันทึกเป็นค่าเริ่มต้นของลูกค้าย่อยรายนี้ และใช้กับบิลปัจจุบัน</p>
-                <div className="mt-2 flex items-center gap-2"><Input type="number" min="0" max="100" step="0.01" value={discountInput ?? String(autoDiscount)} onChange={(e) => setDiscountInput(e.target.value)} aria-label="ส่วนลดเปอร์เซ็นต์" className="min-w-0 flex-1 sm:max-w-36" /><span className="text-sm">%</span><Button variant="outline" onClick={() => void saveDiscount()} disabled={savingSettings || !customer || discountInput === null}>บันทึก<span className="hidden sm:inline">ให้ลูกค้า</span></Button></div>
               </section>
             </div>
 
@@ -461,7 +467,7 @@ export function EntryPage() {
                   </div>
                   <p className={`mt-3 text-sm font-semibold ${remainingAmount < 0 ? "text-red-700" : "text-orange-700"}`}>ยอดคงเหลือบิลนี้: {money(Number.isFinite(remainingAmount) ? remainingAmount : 0)}</p>
                 </section>
-                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end max-xl:sticky max-xl:bottom-[calc(4.25rem+env(safe-area-inset-bottom))] max-xl:z-20 max-xl:-mx-3 max-xl:border-t max-xl:border-slate-200 max-xl:bg-white/95 max-xl:px-3 max-xl:py-2 max-xl:backdrop-blur"><Button variant="outline" onClick={() => { setSheets(savedSheets); clearEntry(); setNotice("ยกเลิกการแก้ไขที่ยังไม่บันทึกแล้ว"); }} disabled={!dirty} className="min-w-0 sm:flex-1">ยกเลิก</Button><Button onClick={saveSheet} disabled={!dirty} className="min-w-0 sm:flex-[2]"><Layers3 className="size-4" /> เก็บร่าง <span className="hidden sm:inline">{money(totals.total)}</span></Button><Button onClick={() => void submitBill()} disabled={!rows.length || !open || submitting || !customer || !Number.isFinite(netAmount) || remainingAmount < 0 || !Number.isFinite(paidAmount)} className="col-span-2 row-start-1 min-w-0 sm:flex-[2]">{submitting ? "กำลังบันทึก..." : "บันทึกบิลและยอดรับ"}</Button></div>
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end max-xl:sticky max-xl:bottom-[calc(4.25rem+env(safe-area-inset-bottom))] max-xl:z-20 max-xl:-mx-3 max-xl:border-t max-xl:border-slate-200 max-xl:bg-white/95 max-xl:px-3 max-xl:py-2 max-xl:backdrop-blur"><Button variant="outline" onClick={() => { setSheets(savedSheets); clearEntry(); setNotice("ยกเลิกการแก้ไขที่ยังไม่บันทึกแล้ว"); }} disabled={!dirty} className="min-w-0 sm:flex-1">ยกเลิก</Button><Button onClick={saveSheet} disabled={!dirty} className="min-w-0 sm:flex-[2]"><Layers3 className="size-4" /> เก็บร่าง <span className="hidden sm:inline">{money(totals.total)}</span></Button><Button onClick={() => void submitBill()} disabled={!rows.length || !open || ledgerRemote.loading || submitting || !customer || !Number.isFinite(netAmount) || remainingAmount < 0 || !Number.isFinite(paidAmount)} className="col-span-2 row-start-1 min-w-0 sm:flex-[2]">{submitting ? "กำลังบันทึก..." : "บันทึกบิลและยอดรับ"}</Button></div>
                 {notice && <p role="status" className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">{notice}</p>}
               </div>
 

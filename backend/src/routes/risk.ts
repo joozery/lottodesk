@@ -20,10 +20,9 @@ const layoffBody = z.object({
 });
 
 const discountBody = z.object({
-  threshold: z.number().positive("ยอดเกณฑ์ต้องมากกว่า 0").max(1_000_000_000),
-  below: z.number().min(0).max(100),
-  atOrAbove: z.number().min(0).max(100),
-});
+  defaults: z.object(Object.fromEntries(BET_TYPES.map((t) => [t, z.number().min(0).max(100)]))).strict(),
+  tiers: z.array(z.object({ threshold: z.number().positive(), percent: z.number().min(0).max(100) })).max(20),
+}).strict();
 
 export function riskRouter() {
   const r = Router();

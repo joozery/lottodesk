@@ -10,7 +10,7 @@ import { ErrorState } from "@/components/ui/state-panels";
 import { useRemote } from "@/hooks/use-remote";
 import { BET_LABEL } from "@/lib/prize-calc";
 import type { BetType, Limits } from "@/lib/types";
-import { DEFAULT_DISCOUNT, type DiscountTier } from "@/lib/discount";
+import { BET_TYPES, DEFAULT_DISCOUNT_CONFIG, normalizeDiscounts, type DiscountConfig } from "@/lib/discount";
 import { fetchDiscountTier, fetchLimits, saveDiscountTier, saveLimits } from "@/services/risk-service";
 import { SettingsTabs } from "../settings-tabs";
 
@@ -19,108 +19,71 @@ const draftOf = (l: Limits) => Object.fromEntries(TYPES.map((t) => [t, l[t] ? St
 
 export function LimitsSettingsPage() {
   const [nonce, setNonce] = useState(0);
-  const { data, error: e1 } = useRemote(`limits-${nonce}`, fetchLimits);
-  const { data: tier, error: e2 } = useRemote(`discount-${nonce}`, fetchDiscountTier);
+  const { data, error: e1 } = useRemote("limits-" + nonce, fetchLimits);
+  const { data: discounts, error: e2 } = useRemote("discount-" + nonce, fetchDiscountTier);
   const error = e1 || e2;
   return (
     <>
       <TopBar breadcrumb={["ตั้งค่า", "วงเงินรับ/ส่วนลด"]} />
       <main className="mx-auto w-full max-w-[1200px] flex-1 p-4 pb-28 sm:p-6 sm:pb-28">
         <SettingsTabs current="/settings/limits" />
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900">วงเงินรับต่อเลข</h1>
-          <p className="mt-1 text-sm text-slate-500">ตั้งยอดรับสูงสุดต่อเลขแต่ละประเภท ระบบยังรับบิลที่เกินได้ แต่จะแจ้งเตือนตอนคีย์โพยและแสดงในหน้า ยอดซื้อ/ตีออก</p>
-        </div>
-        {error ? <ErrorState onRetry={() => setNonce((n) => n + 1)}>โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง</ErrorState> : !data || !tier ? <Skeleton className="h-96 rounded-xl" /> : <div className="grid items-start gap-5 lg:grid-cols-2"><LimitsForm initial={data} /><DiscountForm initial={tier} /></div>}
+        <div className="mb-6"><h1 className="text-2xl font-bold text-slate-900">วงเงินรับต่อเลข</h1><p className="mt-1 text-sm text-slate-500">ตั้งวงเงินและส่วนลดตั้งต้นแยกตามประเภทเลข ระบบยังรับบิลที่เกินวงเงินได้ แต่ยังไม่แตะกติกายอดเกิน</p></div>
+        {error ? <ErrorState onRetry={() => setNonce((n) => n + 1)}>โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง</ErrorState> : !data || !discounts ? <Skeleton className="h-96 rounded-xl" /> : <LimitsAndDiscountsForm initialLimits={data} initialDiscounts={discounts} />}
       </main>
     </>
   );
 }
 
-function LimitsForm({ initial }: { initial: Limits }) {
-  const [draft, setDraft] = useState(() => draftOf(initial));
+function LimitsAndDiscountsForm({ initialLimits, initialDiscounts }: { initialLimits: Limits; initialDiscounts: DiscountConfig }) {
+  const [limits, setLimits] = useState(() => draftOf(initialLimits));
+  const [discounts, setDiscounts] = useState(() => normalizeDiscounts(initialDiscounts));
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
-  const parsed = TYPES.map((t) => ({ t, raw: draft[t].trim(), n: Number(draft[t]) }));
-  const invalid = parsed.filter((p) => p.raw !== "" && !(Number.isFinite(p.n) && p.n > 0));
+  const currentDiscounts = normalizeDiscounts(discounts);
+  const parsed = TYPES.map((t) => ({ t, raw: limits[t].trim(), n: Number(limits[t]) }));
+  const invalidLimits = parsed.filter((p) => p.raw !== "" && !(Number.isFinite(p.n) && p.n > 0));
+  const invalidDiscounts = BET_TYPES.some((type) => !Number.isFinite(currentDiscounts.defaults[type]) || currentDiscounts.defaults[type] < 0 || currentDiscounts.defaults[type] > 100) || currentDiscounts.tiers.some((tier) => !Number.isFinite(tier.threshold) || tier.threshold <= 0 || !Number.isFinite(tier.percent) || tier.percent < 0 || tier.percent > 100);
 
   async function save() {
-    if (invalid.length) return;
-    const next: Limits = {};
-    for (const p of parsed) if (p.raw !== "") next[p.t] = p.n;
+    if (invalidLimits.length || invalidDiscounts) return;
+    const nextLimits: Limits = {};
+    for (const p of parsed) if (p.raw !== "") nextLimits[p.t] = p.n;
     setSaving(true);
     try {
-      await saveLimits(next);
-      setNotice({ ok: true, text: "บันทึกวงเงินแล้ว" });
+      await Promise.all([saveLimits(nextLimits), saveDiscountTier(currentDiscounts)]);
+      setNotice({ ok: true, text: "บันทึกวงเงินและส่วนลดตั้งต้นแล้ว" });
     } catch (e) {
       setNotice({ ok: false, text: e instanceof Error ? e.message : "บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" });
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-      <h2 className="font-semibold text-slate-900">วงเงินรับสูงสุดต่อเลข (บาท)</h2>
-      <p className="mt-1 text-xs text-slate-500">เว้นว่าง = ไม่จำกัด · โต๊ดนับเลขที่สลับหลักกันเป็นเลขเดียวกัน (561 = 615)</p>
-      <ul className="mt-3 divide-y divide-slate-100">
-        {TYPES.map((t) => (
-          <li key={t} className="flex items-center justify-between gap-3 py-2">
-            <span className="text-sm font-medium text-slate-800">{BET_LABEL[t]}</span>
-            <Input type="number" min="0" step="any" inputMode="decimal" value={draft[t]} placeholder="ไม่จำกัด" aria-label={`วงเงิน ${BET_LABEL[t]}`} aria-invalid={invalid.some((p) => p.t === t)} onChange={(e) => { setDraft((d) => ({ ...d, [t]: e.target.value })); setNotice(null); }} className="w-36" />
-          </li>
-        ))}
-      </ul>
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button onClick={() => void save()} disabled={invalid.length > 0 || saving}>{saving ? "กำลังบันทึก..." : "บันทึก"}</Button>
-        <Button variant="ghost" onClick={() => setDraft(draftOf({}))}>ล้างทั้งหมด (ไม่จำกัด)</Button>
-        {invalid.length > 0 && <span role="alert" className="text-xs text-red-600">วงเงินต้องเป็นเลขมากกว่า 0</span>}
+      <h2 className="font-semibold text-slate-900">วงเงินรับและส่วนลดตั้งต้น</h2>
+      <p className="mt-1 text-xs text-slate-500">ตั้งค่าแยกตามประเภทเลข · วงเงินเว้นว่าง = ไม่จำกัด · ส่วนลดตั้งต้น 0–100%</p>
+      <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[560px] text-sm">
+        <thead><tr className="border-b border-slate-100 text-left text-xs text-slate-500"><th className="py-2 pr-3 font-medium">ประเภทเลข</th><th className="py-2 pr-3 font-medium">วงเงินรับสูงสุด (บาท)</th><th className="py-2 font-medium">ส่วนลดตั้งต้น (%)</th></tr></thead>
+        <tbody>{TYPES.map((type) => <tr key={type} className="border-b border-slate-100">
+          <td className="py-2 pr-3 font-medium text-slate-800">{BET_LABEL[type]}</td>
+          <td className="py-2 pr-3"><Input type="number" min="0" step="any" inputMode="decimal" value={limits[type]} placeholder="ไม่จำกัด" aria-label={"วงเงิน " + BET_LABEL[type]} aria-invalid={invalidLimits.some((p) => p.t === type)} onChange={(e) => { setLimits((d) => ({ ...d, [type]: e.target.value })); setNotice(null); }} className="w-40" /></td>
+          <td className="py-2"><Input type="number" min="0" max="100" step="any" inputMode="decimal" value={currentDiscounts.defaults[type]} aria-label={"ส่วนลดตั้งต้น " + BET_LABEL[type]} onChange={(e) => { setDiscounts((d) => ({ ...normalizeDiscounts(d), defaults: { ...normalizeDiscounts(d).defaults, [type]: Number(e.target.value) } })); setNotice(null); }} className="w-40" /></td>
+        </tr>)}</tbody>
+      </table></div>
+      <div className="mt-5 border-t border-slate-100 pt-4">
+        <h3 className="font-semibold text-slate-900">ส่วนลดตามยอด</h3>
+        <p className="mt-1 text-xs text-slate-500">ใช้กติกาชุดเดียวกับทุกประเภท ยกเว้น 2 ตัวบนและ 2 ตัวล่างที่ใช้ส่วนลดตั้งต้นคงที่</p>
+        <div className="mt-3 space-y-3">
+          <GlobalTierEditor discounts={currentDiscounts} setDiscounts={setDiscounts} />
+        </div>
       </div>
-      {notice && (
-        <p role="status" className={`mt-3 flex gap-2 rounded-lg p-3 text-xs ${notice.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>
-          <Info className="mt-0.5 size-4 shrink-0" /> {notice.text}
-        </p>
-      )}
+      <div className="mt-4 flex flex-wrap items-center gap-2"><Button onClick={() => void save()} disabled={invalidLimits.length > 0 || invalidDiscounts || saving}>{saving ? "กำลังบันทึก..." : "บันทึก"}</Button><Button variant="ghost" onClick={() => { setLimits(draftOf({})); setDiscounts({ defaults: { ...DEFAULT_DISCOUNT_CONFIG.defaults }, tiers: [] }); }}>ล้างค่าเริ่มต้น</Button>{(invalidLimits.length > 0 || invalidDiscounts) && <span role="alert" className="text-xs text-red-600">ตรวจสอบวงเงินและส่วนลดให้ถูกต้อง</span>}</div>
+      {notice && <p role="status" className={"mt-3 flex gap-2 rounded-lg p-3 text-xs " + (notice.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700")}><Info className="mt-0.5 size-4 shrink-0" /> {notice.text}</p>}
     </section>
   );
 }
 
-function DiscountForm({ initial }: { initial: DiscountTier }) {
-  const [draft, setDraft] = useState({ threshold: String(initial.threshold), below: String(initial.below), atOrAbove: String(initial.atOrAbove) });
-  const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
-  const n = { threshold: Number(draft.threshold), below: Number(draft.below), atOrAbove: Number(draft.atOrAbove) };
-  const valid = Object.values(draft).every((v) => v.trim() !== "") && n.threshold > 0 && [n.below, n.atOrAbove].every((p) => Number.isFinite(p) && p >= 0 && p <= 100);
-  const set = (k: keyof typeof draft) => (e: React.ChangeEvent<HTMLInputElement>) => { setDraft((d) => ({ ...d, [k]: e.target.value })); setNotice(null); };
-
-  async function save() {
-    if (!valid) return;
-    setSaving(true);
-    try {
-      await saveDiscountTier(n);
-      setNotice({ ok: true, text: "บันทึกส่วนลดแล้ว มีผลกับบิลที่คีย์ต่อจากนี้" });
-    } catch (e) {
-      setNotice({ ok: false, text: e instanceof Error ? e.message : "บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง" });
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-      <h2 className="font-semibold text-slate-900">ส่วนลดอัตโนมัติตามยอดบิล</h2>
-      <p className="mt-1 text-xs text-slate-500">คิดจากยอดรวมก่อนหักส่วนลด · ลูกค้าที่บันทึกส่วนลดไว้เองจะใช้ส่วนลดของลูกค้าก่อน · พิมพ์แก้ตอนคีย์โพยได้</p>
-      <div className="mt-3 space-y-3 text-sm">
-        <label className="flex items-center justify-between gap-3 text-slate-800">ยอดเกณฑ์ (บาท)<Input type="number" min="0" step="any" inputMode="decimal" value={draft.threshold} onChange={set("threshold")} className="w-36" aria-label="ยอดเกณฑ์" /></label>
-        <label className="flex items-center justify-between gap-3 text-slate-800">ต่ำกว่าเกณฑ์ ลด (%)<Input type="number" min="0" max="100" step="any" inputMode="decimal" value={draft.below} onChange={set("below")} className="w-36" aria-label="ส่วนลดต่ำกว่าเกณฑ์" /></label>
-        <label className="flex items-center justify-between gap-3 text-slate-800">ตั้งแต่เกณฑ์ขึ้นไป ลด (%)<Input type="number" min="0" max="100" step="any" inputMode="decimal" value={draft.atOrAbove} onChange={set("atOrAbove")} className="w-36" aria-label="ส่วนลดตั้งแต่เกณฑ์ขึ้นไป" /></label>
-      </div>
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <Button onClick={() => void save()} disabled={!valid || saving}>{saving ? "กำลังบันทึก..." : "บันทึก"}</Button>
-        <Button variant="ghost" onClick={() => setDraft({ threshold: String(DEFAULT_DISCOUNT.threshold), below: String(DEFAULT_DISCOUNT.below), atOrAbove: String(DEFAULT_DISCOUNT.atOrAbove) })}>ใช้ค่าเริ่มต้น</Button>
-        {!valid && <span role="alert" className="text-xs text-red-600">ยอดเกณฑ์ต้องมากกว่า 0 และส่วนลดอยู่ระหว่าง 0–100</span>}
-      </div>
-      {notice && <p role="status" className={`mt-3 flex gap-2 rounded-lg p-3 text-xs ${notice.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}><Info className="mt-0.5 size-4 shrink-0" /> {notice.text}</p>}
-    </section>
-  );
+function GlobalTierEditor({ discounts, setDiscounts }: { discounts: DiscountConfig; setDiscounts: React.Dispatch<React.SetStateAction<DiscountConfig>> }) {
+  const rows = [...discounts.tiers].sort((a, b) => a.threshold - b.threshold);
+  const update = (index: number, patch: Partial<{ threshold: number; percent: number }>) => setDiscounts((current) => { const normalized = normalizeDiscounts(current); const next = [...normalized.tiers].sort((a, b) => a.threshold - b.threshold).map((row, i) => i === index ? { ...row, ...patch } : row).sort((a, b) => a.threshold - b.threshold); return { ...normalized, tiers: next }; });
+  return <div className="rounded-lg border border-slate-100 p-3"><div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold text-slate-800">ขั้นส่วนลดกลาง</p><Button variant="outline" size="sm" onClick={() => setDiscounts((current) => { const normalized = normalizeDiscounts(current); const last = [...normalized.tiers].sort((a, b) => a.threshold - b.threshold).at(-1); const nextThreshold = !last ? 20000 : last.threshold === 20000 ? 50000 : last.threshold + 50000; const nextPercent = last?.percent ?? 0; return { ...normalized, tiers: [...normalized.tiers, { threshold: nextThreshold, percent: nextPercent }].sort((a, b) => a.threshold - b.threshold) }; })}>เพิ่มขั้น</Button></div>{rows.map((tier, index) => <div key={tier.threshold + "-" + index} className="mt-2 grid grid-cols-[1fr_1fr_auto] items-end gap-2"><label className="text-xs text-slate-600">ถึงยอด (บาท)<Input type="number" min="1" value={tier.threshold} onChange={(e) => update(index, { threshold: Number(e.target.value) })} /></label><label className="text-xs text-slate-600">ส่วนลด (%)<Input type="number" min="0" max="100" value={tier.percent} onChange={(e) => update(index, { percent: Number(e.target.value) })} /></label><Button variant="ghost" size="sm" onClick={() => setDiscounts((current) => { const normalized = normalizeDiscounts(current); const sorted = [...normalized.tiers].sort((a, b) => a.threshold - b.threshold); return { ...normalized, tiers: sorted.filter((_, i) => i !== index) }; })}>ลบ</Button></div>)}</div>;
 }

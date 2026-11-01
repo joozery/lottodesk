@@ -31,7 +31,7 @@ export function SelectContent({ className, children, ...props }: React.Component
         position="popper"
         sideOffset={4}
         className={cn(
-          "z-[60] max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-lg",
+          "z-[100] max-h-72 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-slate-200 bg-white p-1 shadow-lg",
           className,
         )}
         {...props}

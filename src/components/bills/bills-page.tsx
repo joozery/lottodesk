@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Info, Plus, Upload } from "@/components/icons";
 import { TopBar } from "@/components/layout/top-bar";
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/u
 import { ErrorState } from "@/components/ui/state-panels";
 import { useDealersData } from "@/hooks/use-dealers-data";
 import { downloadCsv } from "@/lib/csv";
-import { describeBill, matchesQuery, matchesStatus, resultOf, SORTERS, type SortKey, type StatusFilter } from "@/lib/bills";
+import { describeBill, matchesQuery, matchesStatus, resultOf, SORTERS, type BillView, type SortKey, type StatusFilter } from "@/lib/bills";
 import { formatDate, lotteryLabel } from "@/lib/format";
 import type { LotteryFilter as LotteryValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,7 @@ import { BillDetailPanel } from "./bill-detail-panel";
 import { BillKpis, type BillTotals } from "./bill-kpis";
 import { BillList, PAGE_SIZE } from "./bill-list";
 import { BillToolbar } from "./bill-toolbar";
+import { GroupedBillDetail, GroupedBillList } from "./grouped-bill-list";
 
 const OCTOBER: DateRange = { from: "2026-10-01", to: "2026-10-31" };
 const SECOND_HALF: DateRange = { from: "2026-10-16", to: "2026-10-31" };
@@ -36,6 +37,9 @@ export function BillsPage() {
   const [dealerId, setDealerId] = useState("all");
   const [collectorId, setCollectorId] = useState("all");
   const [nonce, setNonce] = useState(0);
+  const [grouped, setGrouped] = useState(true);
+  const [groupDetail, setGroupDetail] = useState<BillView[] | null>(null);
+  const rangeInitialized = useRef(false);
 
   const data = useDealersData(nonce, () => ({ lottery, periodId: null, ...range }));
   const { dealers, periods, ledger } = data;
@@ -43,6 +47,12 @@ export function BillsPage() {
   const refreshing = data.ledgerLoading && ready;
 
   const allDates = (periods ?? []).map((p) => p.drawDate).sort();
+  useEffect(() => {
+    if (!rangeInitialized.current && allDates.length) {
+      rangeInitialized.current = true;
+      setRange({ from: allDates[0], to: allDates[allDates.length - 1] });
+    }
+  }, [allDates]);
   const presets = [
     { label: "ตุลาคม 2569", range: OCTOBER },
     { label: "16–31 ต.ค.", range: SECOND_HALF },
@@ -169,18 +179,11 @@ export function BillsPage() {
                 onSort={reset(setSort)}
                 counts={counts}
               />
-              <BillList
-                rows={visible}
-                total={total}
-                page={currentPage}
-                onPage={setPage}
-                onOpen={setOpenId}
-                selectedId={panelView?.bill.id ?? null}
-                filtered={status !== "all" || query.trim() !== ""}
-              />
+              <div className="flex justify-end"><Button variant="outline" size="sm" onClick={() => { setGrouped((value) => !value); setGroupDetail(null); }}>{grouped ? "ดูแยกรายบิล" : "ดูรวมลูกค้าหลัก"}</Button></div>
+              {grouped ? <GroupedBillList rows={filtered} filtered={status !== "all" || query.trim() !== ""} onSelectGroup={setGroupDetail} /> : <BillList rows={visible} total={total} page={currentPage} onPage={setPage} onOpen={setOpenId} selectedId={panelView?.bill.id ?? null} filtered={status !== "all" || query.trim() !== ""} />}
               </div>
               <aside aria-label="รายละเอียดบิล" className="sticky top-[72px] hidden max-h-[calc(100vh-88px)] overflow-y-auto rounded-xl border border-slate-200 bg-white xl:block">
-                {panelView ? <BillDetailPanel key={panelView.bill.id} view={panelView} /> : (
+                {grouped && groupDetail ? <GroupedBillDetail rows={groupDetail} /> : panelView ? <BillDetailPanel key={panelView.bill.id} view={panelView} /> : (
                   <p className="p-8 text-center text-sm text-slate-500">{all ? "เลือกบิลเพื่อดูรายละเอียด" : "กำลังโหลด..."}</p>
                 )}
               </aside>

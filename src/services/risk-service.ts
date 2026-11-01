@@ -1,5 +1,5 @@
 // Service วงเงินรับ ยอดซื้อต่อเลข และแผ่นตีออก — เรียก API จริง
-import type { DiscountTier } from "@/lib/discount";
+import type { DiscountConfig } from "@/lib/discount";
 import type { BetLine, Exposure, LayoffSheet, Limits } from "@/lib/types";
 import { api } from "./api";
 
@@ -11,5 +11,5 @@ export const fetchTargets = () => api<string[]>("/risk/targets");
 export const createLayoff = (body: { periodId: string; target: string; note: string; lines: BetLine[] }) => api<LayoffSheet>("/risk/layoffs", { method: "POST", body });
 export const deleteLayoff = (id: string) => api<void>(`/risk/layoffs/${id}`, { method: "DELETE" });
 
-export const fetchDiscountTier = () => api<DiscountTier>("/risk/discount");
-export const saveDiscountTier = (tier: DiscountTier) => api<DiscountTier>("/risk/discount", { method: "PUT", body: tier });
+export const fetchDiscountTier = () => api<DiscountConfig>("/risk/discount");
+export const saveDiscountTier = (discounts: DiscountConfig) => api<DiscountConfig>("/risk/discount", { method: "PUT", body: discounts });
