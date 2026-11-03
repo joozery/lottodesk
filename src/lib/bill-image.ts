@@ -1,5 +1,5 @@
 import { paymentStatusOf, PAYMENT_LABEL, type BillView } from "./bills";
-import { formatDate, formatDateTimeFull, formatNumber, lotteryLabel } from "./format";
+import { formatDate, formatNumber, lotteryLabel } from "./format";
 import { BET_LABEL } from "./prize-calc";
 
 const W = 1080;
@@ -7,6 +7,8 @@ const PAD = 56;
 const ROW_H = 44;
 const BASE_ROWS = 6; // ภาพ 1:1 พอดีที่ 6 รายการ; มากกว่านั้นภาพจะสูงขึ้นตามจำนวนรายการ
 const MAX_ROWS = 40; // เกินนี้สรุปเป็นแถว "และอีก N รายการ"
+const TABLE_TYPES = ["top3", "tod3", "bottom3", "top2", "bottom2", "runTop", "runBottom"] as const;
+const TABLE_LABELS = ["เลขที่", "3 บน", "3 โต๊ด", "3 ล่าง", "2 บน", "2 ล่าง", "วิ่งบน", "วิ่งล่าง"] as const;
 
 const C = {
   navy: "#0f2a5c",
@@ -16,12 +18,6 @@ const C = {
   panel: "#f1f5f9",
   white: "#ffffff",
 };
-const PAY = {
-  paid: { fg: "#047857", bg: "#ecfdf5" },
-  partial: { fg: "#1d4ed8", bg: "#eff6ff" },
-  unpaid: { fg: "#c2410c", bg: "#fff7ed" },
-} as const;
-
 const baht = (n: number) => `฿${formatNumber(n)}`;
 
 function loadImage(src: string) {
@@ -51,19 +47,22 @@ function fit(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
 /** สร้างภาพใบรับโพย (PNG) จากข้อมูลบิล — กว้าง 1080px, สูง 1080px เมื่อมีไม่เกิน 6 รายการ */
 export async function renderBillImage(view: BillView): Promise<Blob> {
   const { bill, period } = view;
-  const lines = bill.lines.slice(0, MAX_ROWS);
-  const hidden = bill.lines.slice(MAX_ROWS);
-  const rows = lines.length + (hidden.length ? 1 : 0);
+  const grouped = new Map<string, Partial<Record<(typeof TABLE_TYPES)[number], number>>>();
+  bill.lines.forEach((line) => {
+    const values = grouped.get(line.number) ?? {};
+    values[line.type] = (values[line.type] ?? 0) + line.amount;
+    grouped.set(line.number, values);
+  });
+  const tableRows = Array.from(grouped.entries()).slice(0, MAX_ROWS);
+  const hidden = Array.from(grouped.entries()).slice(MAX_ROWS);
+  const rows = tableRows.length + (hidden.length ? 1 : 0) + 1;
   const H = 1080 + Math.max(0, rows - BASE_ROWS) * ROW_H;
 
   // ใช้ฟอนต์เดียวกับหน้าเว็บ (Noto Sans Thai) และรอให้โหลดเสร็จก่อนวาด
   const family = getComputedStyle(document.body).fontFamily;
-  const sample = `${bill.no} ${view.customer} ${view.collector} ${view.dealer} ชำระแล้ว ค้างชำระ ใบรับโพย ยอดสุทธิ รายการ`;
+  const sample = `${bill.no} ${view.customer} ${view.collector} ชำระแล้ว ค้างชำระ ใบรับโพย ยอดสุทธิ รายการ`;
   await Promise.all([400, 600, 700].map((w) => document.fonts.load(`${w} 28px ${family}`, sample)));
-  const [logo, flag] = await Promise.all([
-    loadImage("/logo/lottodesk-logo.png"),
-    loadImage(bill.lottery === "thai" ? "/flags/th.svg" : "/flags/la.svg"),
-  ]);
+  const flag = await loadImage(bill.lottery === "thai" ? "/flags/th.svg" : "/flags/la.svg");
 
   const canvas = document.createElement("canvas");
   canvas.width = W;
@@ -82,64 +81,71 @@ export async function renderBillImage(view: BillView): Promise<Blob> {
   ctx.fillStyle = C.white;
   ctx.fillRect(0, 0, W, H);
 
-  // หัวบิล: โลโก้ + เวลาซื้อ
-  const logoH = 56;
-  ctx.drawImage(logo, PAD, PAD, (logo.width / logo.height) * logoH, logoH);
+  // หัวบิล
   font(600, 28);
   text("ใบรับโพย", W - PAD, PAD + 38, "right", C.muted);
 
-  // เลขบิล + สถานะการชำระ
-  const status = paymentStatusOf(bill);
+  // เลขบิล
   font(700, 64);
   text(bill.no, PAD, 176, "left", C.navy);
-  font(600, 28);
-  const pill = PAY[status];
-  const pillW = ctx.measureText(PAYMENT_LABEL[status]).width + 56;
-  roundRect(ctx, W - PAD - pillW, 132, pillW, 56, 28, pill.bg);
-  text(PAYMENT_LABEL[status], W - PAD - pillW / 2, 170, "center", pill.fg);
 
-  // ประเภทหวย + งวด + เวลาซื้อ
+  // ประเภทหวย + งวด
   const flagW = 48;
   const flagH = (flag.height / flag.width) * flagW || 36;
   ctx.drawImage(flag, PAD, 214, flagW, flagH);
   font(600, 32);
   text(`${lotteryLabel[bill.lottery]} · งวด ${period ? formatDate(period.drawDate) : "-"}`, PAD + flagW + 16, 248, "left", C.ink);
-  font(400, 26);
-  text(`ซื้อเมื่อ ${formatDateTimeFull(bill.createdAt)}`, PAD, 290, "left", C.muted);
-
-  // กล่องข้อมูล: เจ้ามือ / ผู้ส่งโพย / เจ้าของโพย
+  // กล่องข้อมูลลูกค้า
   roundRect(ctx, PAD, 318, W - PAD * 2, 104, 18, C.panel);
-  const colW = (W - PAD * 2 - 56) / 3;
-  [["เจ้ามือ", view.dealer], ["ผู้ส่งโพย", view.collector], ["เจ้าของโพย", view.customer]].forEach(([label, value], i) => {
-    const x = PAD + 28 + i * colW;
-    font(400, 24);
-    text(label, x, 358, "left", C.muted);
+  const infoColW = (W - PAD * 2 - 56) / 2;
+  [view.customer, view.collector].forEach((value, i) => {
+    const x = PAD + 28 + i * infoColW;
     font(700, 30);
-    text(fit(ctx, value, colW - 16), x, 400, "left", C.ink);
+    text(fit(ctx, value, infoColW - 16), x, 378, "left", C.ink);
   });
 
-  // ตารางรายการ
+  // ตารางรายการแบบสรุปเลขเดียวต่อแถว ตามประเภทการเดิมพัน
   const tableTop = 448;
-  roundRect(ctx, PAD, tableTop, W - PAD * 2, 48, 12, C.panel);
-  font(600, 24);
-  text("ประเภท", PAD + 24, tableTop + 32, "left", C.muted);
-  text("เลข", W / 2, tableTop + 32, "center", C.muted);
-  text("เงิน", W - PAD - 24, tableTop + 32, "right", C.muted);
+  const tableW = W - PAD * 2;
+  const tableColW = tableW / TABLE_LABELS.length;
+  const headerH = 54;
+  ctx.fillStyle = "#dbeafe";
+  ctx.fillRect(PAD, tableTop, tableW, headerH);
+  font(700, 20);
+  TABLE_LABELS.forEach((label, index) => text(label, PAD + tableColW * index + tableColW / 2, tableTop + 35, "center", C.navy));
 
-  let y = tableTop + 48;
-  const drawRow = (label: string, number: string, amount: string, italic = false) => {
-    font(italic ? 400 : 600, 28);
-    text(label, PAD + 24, y + 31, "left", italic ? C.muted : C.ink);
-    font(700, 30);
-    text(number, W / 2, y + 31, "center", C.ink);
-    font(600, 28);
-    text(amount, W - PAD - 24, y + 31, "right", C.ink);
+  let y = tableTop + headerH;
+  const drawGridRow = (number: string, values: Partial<Record<(typeof TABLE_TYPES)[number], number>>, fill = C.white) => {
+    ctx.fillStyle = fill;
+    ctx.fillRect(PAD, y, tableW, ROW_H);
+    font(700, 24);
+    text(number, PAD + tableColW / 2, y + 30, "center", C.ink);
+    font(600, 20);
+    TABLE_TYPES.forEach((type, index) => text(values[type] ? formatNumber(values[type]!) : "-", PAD + tableColW * (index + 1) + tableColW / 2, y + 29, "center", C.ink));
+    ctx.strokeStyle = C.line;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(PAD, y, tableW, ROW_H);
+    for (let index = 1; index < TABLE_LABELS.length; index += 1) {
+      ctx.beginPath();
+      ctx.moveTo(PAD + tableColW * index, y);
+      ctx.lineTo(PAD + tableColW * index, y + ROW_H);
+      ctx.stroke();
+    }
     ctx.fillStyle = C.line;
-    ctx.fillRect(PAD, y + ROW_H - 1, W - PAD * 2, 1);
     y += ROW_H;
   };
-  lines.forEach((l) => drawRow(BET_LABEL[l.type], l.number, baht(l.amount)));
-  if (hidden.length) drawRow(`และอีก ${formatNumber(hidden.length)} รายการ`, "", baht(hidden.reduce((s, l) => s + l.amount, 0)), true);
+  tableRows.forEach(([number, values]) => drawGridRow(number, values));
+  const totals = bill.lines.reduce<Partial<Record<(typeof TABLE_TYPES)[number], number>>>((result, line) => {
+    result[line.type] = (result[line.type] ?? 0) + line.amount;
+    return result;
+  }, {});
+  drawGridRow("รวม", totals, "#eff6ff");
+  if (hidden.length) {
+    const hiddenTotal = hidden.reduce((sum, [, values]) => sum + Object.values(values).reduce((rowSum, amount) => rowSum + (amount ?? 0), 0), 0);
+    drawGridRow(`+${formatNumber(hidden.length)}`, {}, C.panel);
+    font(400, 18);
+    text(`รายการเพิ่มเติม ${formatNumber(hidden.length)} เลข · ${baht(hiddenTotal)}`, W - PAD - 12, y - 13, "right", C.muted);
+  }
 
   // รวม + ยอดสุทธิ
   y += 8;
@@ -151,13 +157,8 @@ export async function renderBillImage(view: BillView): Promise<Blob> {
   font(600, 32);
   text("ยอดสุทธิ", PAD + 32, y + 56, "left", C.white);
   font(700, 46);
-  text(baht(bill.amount), W - PAD - 32, y + 58, "right", C.white);
+  text(baht(bill.grossAmount ?? bill.amount), W - PAD - 32, y + 58, "right", C.white);
   y += 88 + 20;
-
-  // สถานะการชำระ
-  roundRect(ctx, PAD, y, W - PAD * 2, 64, 16, pill.bg);
-  font(600, 28);
-  text(`${PAYMENT_LABEL[status]} · รับแล้ว ${baht(bill.amount - bill.outstanding)} · ค้าง ${baht(bill.outstanding)}`, W / 2, y + 41, "center", pill.fg);
 
   // ท้ายภาพ
   font(400, 22);
@@ -175,7 +176,7 @@ export function billSummaryText(view: BillView) {
   if (bill.lines.length > 10) shown.push(`…และอีก ${bill.lines.length - 10} รายการ`);
   return [
     `บิล ${bill.no} · ${lotteryLabel[bill.lottery]} งวด ${period ? formatDate(period.drawDate) : "-"}`,
-    `เจ้าของโพย ${view.customer} (ผู้ส่งโพย ${view.collector} · เจ้ามือ ${view.dealer})`,
+    `เจ้าของโพย ${view.customer} (ผู้ส่งโพย ${view.collector})`,
     ...shown,
     `ยอดเลข ${baht(bill.grossAmount ?? bill.amount)} · ส่วนลด ${bill.discountPercent ?? 0}% · ยอดสุทธิ ${baht(bill.amount)} · ${PAYMENT_LABEL[paymentStatusOf(bill)]} (รับแล้ว ${baht(bill.amount - bill.outstanding)} · ค้าง ${baht(bill.outstanding)})`,
   ].join("\n");

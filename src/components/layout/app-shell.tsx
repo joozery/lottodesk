@@ -1,11 +1,13 @@
 import type { ReactNode } from "react";
 import { AppSidebar } from "./app-sidebar";
 import { BottomNav } from "./bottom-nav";
+import { GlobalShortcuts } from "./global-shortcuts";
 
 /** จอใหญ่ (xl ขึ้นไป): Sidebar ถาวร · จอเล็ก: แถบเมนูล่างแบบแอปมือถือ */
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen">
+      <GlobalShortcuts />
       <aside className="sticky top-0 hidden h-screen w-[220px] shrink-0 border-r border-slate-200 xl:block">
         <AppSidebar />
       </aside>

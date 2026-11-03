@@ -27,6 +27,8 @@ export interface PayoutNumbers {
   top3: string;
   top2: string;
   bottom2: string;
+  runTop: string;
+  runBottom: string;
   /** หวยไทย: เลขหน้า 3 ตัว + เลขท้าย 3 ตัว; หวยลาว: ไม่มี */
   bottom3: string[];
 }
@@ -40,12 +42,14 @@ export function payoutNumbers(lottery: Lottery, result: PrizeResult): PayoutNumb
       top3: first.slice(-3),
       top2: first.slice(-2),
       bottom2: nums(result, "last2")[0] ?? "",
-      bottom3: [...nums(result, "front3"), ...nums(result, "last3")],
+      runTop: nums(result, "runTop")[0] ?? first.slice(-3),
+      runBottom: nums(result, "runBottom")[0] ?? nums(result, "last2")[0] ?? "",
+      bottom3: nums(result, "last3"),
     };
   }
   // หวยลาว: เลข 4 ตัว ABCD → 3 ตัวบน = BCD, 2 ตัวบน = CD, 2 ตัวล่าง = AB
   const four = nums(result, "four")[0] ?? "";
-  return { top3: four.slice(1), top2: four.slice(2), bottom2: four.slice(0, 2), bottom3: [] };
+  return { top3: four.slice(1), top2: four.slice(2), bottom2: four.slice(0, 2), runTop: four.slice(1), runBottom: four.slice(0, 2), bottom3: [] };
 }
 
 const sortDigits = (s: string) => Array.from(s).sort().join("");
@@ -57,8 +61,8 @@ function isWin(line: BetLine, p: PayoutNumbers): boolean {
     case "bottom3": return p.bottom3.includes(line.number);
     case "top2": return line.number === p.top2;
     case "bottom2": return line.number === p.bottom2;
-    case "runTop": return p.top3.includes(line.number);
-    case "runBottom": return p.bottom2.includes(line.number);
+    case "runTop": return p.runTop.includes(line.number);
+    case "runBottom": return p.runBottom.includes(line.number);
   }
 }
 

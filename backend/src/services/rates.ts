@@ -14,4 +14,4 @@ export async function loadRateConfig(): Promise<RateConfig> {
 }
 
 /** อัตราจ่ายที่ใช้จริง: ค่ากลางที่ตั้งไว้ทับค่าเริ่มต้น */
-export const resolveRates = (config: RateConfig): Rates => ({ ...RATES, ...config.rates });
+export const resolveRates = (config: RateConfig, override: Partial<Rates> = {}): Rates => ({ ...RATES, ...config.rates, ...override });

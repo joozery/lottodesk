@@ -29,8 +29,8 @@ function buildRows(bills: Bill[], dealers: Dealer[], result: PrizeResult | null)
       const customer = collector?.customers.find((c) => c.id === bill.customerId);
       const hits = result
         ? bill.lines
-            .filter((l) => linePrize(l, bill.lottery, result, bill.rates) > 0)
-            .map((l) => `${BET_LABEL[l.type]} ${l.number} (${formatNumber(l.amount)} × ${(bill.rates ?? RATES)[l.type]})`)
+            .filter((l) => linePrize(l, bill.lottery, result, { ...(bill.rates ?? RATES), ...(bill.rateOverrides?.[l.number] ?? {}) }) > 0)
+            .map((l) => `${BET_LABEL[l.type]} ${l.number} (${formatNumber(l.amount)} × ${({ ...(bill.rates ?? RATES), ...(bill.rateOverrides?.[l.number] ?? {}) })[l.type]})`)
         : [];
       return {
         bill,

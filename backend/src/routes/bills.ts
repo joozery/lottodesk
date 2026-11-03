@@ -5,6 +5,7 @@ import { Activity, Bill, Dealer, Payment, Period, nextSeq } from "../models";
 import { pubBill } from "../serialize";
 import { BET_LABEL } from "../shared/prize-calc";
 import { computeExposure, normNumber } from "../services/risk";
+import { loadRateConfig, resolveRates } from "../services/rates";
 
 const DIGITS = { top3: 3, tod3: 3, bottom3: 3, top2: 2, bottom2: 2, runTop: 1, runBottom: 1 } as const;
 const line = z.object({
@@ -24,11 +25,34 @@ const createBody = z.object({
   /** true = รับเงินครบแล้วตอนคีย์ (ไม่มียอดค้าง) */
   paid: z.boolean().default(false),
   discountPercent: z.number().min(0).max(100).default(0),
+  specialDiscountPercent: z.number().min(0).max(100).optional(),
   paidAmount: z.number().min(0).max(100_000_000).default(0),
 });
 
 export function billsRouter() {
   const r = Router();
+
+  r.patch("/:id/discount", async (req, res) => {
+    const body = parse(z.object({ numberDiscountPercent: z.number().min(0).max(100), runDiscountPercent: z.number().min(0).max(100) }), req.body);
+    const bill = await Bill.findById(req.params.id);
+    if (!bill) throw new HttpError(404, "ไม่พบบิล");
+    const grossAmount = bill.grossAmount ?? bill.lines.reduce((sum, item) => sum + item.amount, 0);
+    const numberGross = bill.lines.filter((item) => item.type !== "runTop" && item.type !== "runBottom").reduce((sum, item) => sum + item.amount, 0);
+    const runGross = grossAmount - numberGross;
+    const discountAmount = Math.round((numberGross * body.numberDiscountPercent + runGross * body.runDiscountPercent)) / 100;
+    const amount = Math.round((grossAmount - discountAmount) * 100) / 100;
+    const paidAmount = Math.max(0, bill.amount - bill.outstanding);
+    bill.grossAmount = grossAmount;
+    bill.discountPercent = grossAmount > 0 ? Math.round((discountAmount / grossAmount) * 10000) / 100 : 0;
+    bill.specialDiscountPercent = body.numberDiscountPercent;
+    bill.specialNumberDiscountPercent = body.numberDiscountPercent;
+    bill.specialRunDiscountPercent = body.runDiscountPercent;
+    bill.discountAmount = discountAmount;
+    bill.amount = amount;
+    bill.outstanding = Math.max(0, Math.round((amount - paidAmount) * 100) / 100);
+    await bill.save();
+    res.json(pubBill(bill.toObject()));
+  });
 
   r.get("/:id", async (req, res) => {
     const bill = await Bill.findById(req.params.id).lean();
@@ -43,12 +67,15 @@ export function billsRouter() {
       Dealer.findOne({ "collectors._id": body.collectorId }).lean(),
     ]);
     if (!period) throw new HttpError(400, "ไม่พบงวด");
+    const closedLine = body.lines.find((line) => (period.closedNumbers ?? []).includes(line.number));
+    if (closedLine) throw new HttpError(400, `เลข ${closedLine.number} ปิดรับในงวดนี้ ไม่สามารถซื้อได้`);
     const collector = dealer?.collectors.find((c) => c._id === body.collectorId);
     if (!collector) throw new HttpError(400, "ไม่พบผู้ส่งโพย");
     const customer = body.customerId ? collector.customers.find((c) => c._id === body.customerId) : null;
     if (body.customerId && !customer) throw new HttpError(400, "ไม่พบลูกค้าในผู้ส่งโพยนี้");
 
     const grossAmount = body.lines.reduce((s, l) => s + l.amount, 0);
+    const rates = resolveRates(await loadRateConfig(), period.rates ?? {});
     const discountAmount = Math.round(grossAmount * body.discountPercent) / 100;
     const amount = Math.round((grossAmount - discountAmount) * 100) / 100;
     const paidAmount = body.paid ? amount : body.paidAmount;
@@ -65,9 +92,12 @@ export function billsRouter() {
       amount,
       grossAmount,
       discountPercent: body.discountPercent,
+      specialDiscountPercent: body.specialDiscountPercent,
       discountAmount,
       lines: body.lines,
       outstanding: Math.round((amount - paidAmount) * 100) / 100,
+      rates,
+      rateOverrides: Object.fromEntries((period.limitedNumbers ?? []).map((number) => [number, period.limitedRate ?? period.limitedRates?.[number] ?? {}])),
     });
     try {
       if (paidAmount > 0) await Payment.create({ collectorId: body.collectorId, customerId: body.customerId, lottery: period.lottery, periodId: period._id, direction: "in", amount: paidAmount, note: `รับเงินตอนคีย์บิล ${bill.no}`, recorded: true });

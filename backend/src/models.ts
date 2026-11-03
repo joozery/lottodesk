@@ -34,6 +34,11 @@ export const Period = defineModel("Period", new Schema({
   lottery,
   drawDate: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
   limitedNumbers: { type: [String], default: [] },
+  closedNumbers: { type: [String], default: [] },
+  limitedAmounts: { type: Schema.Types.Mixed, default: {} },
+  limitedRates: { type: Schema.Types.Mixed, default: {} },
+  limitedRate: { type: Schema.Types.Mixed, default: {} },
+  rates: { type: Schema.Types.Mixed, default: {} },
 }));
 
 const lineSchema = new Schema({
@@ -51,10 +56,15 @@ export const Bill = defineModel("Bill", new Schema({
   amount: { type: Number, required: true },
   grossAmount: { type: Number },
   discountPercent: { type: Number, default: 0, min: 0, max: 100 },
+  specialDiscountPercent: { type: Number, min: 0, max: 100 },
+  specialNumberDiscountPercent: { type: Number, min: 0, max: 100 },
+  specialRunDiscountPercent: { type: Number, min: 0, max: 100 },
   discountAmount: { type: Number, default: 0, min: 0 },
   lines: { type: [lineSchema], required: true },
   /** ยอดค้างชำระที่เหลือ (ลดลงเมื่อบันทึกรับเงินจากลูกค้า) */
   outstanding: { type: Number, required: true, min: 0 },
+  rates: { type: Schema.Types.Mixed, default: {} },
+  rateOverrides: { type: Schema.Types.Mixed, default: {} },
   createdAt: { type: Date, default: () => new Date(), index: true },
 }));
 
@@ -69,6 +79,7 @@ export const Payment = defineModel("Payment", new Schema({
   amount: { type: Number, required: true, min: 0 },
   note: { type: String, default: "" },
   customerId: { type: String, default: null },
+  billId: { type: String, default: null, index: true },
   /** true = ผู้ใช้บันทึกเอง, false = ข้อมูลตั้งต้น (seed) */
   recorded: { type: Boolean, default: true },
 }));

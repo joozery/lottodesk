@@ -3,6 +3,7 @@ import { z } from "zod";
 import { HttpError, parse } from "../middleware/http";
 import { Period, PrizeResultModel } from "../models";
 import { pubPeriod } from "../serialize";
+import { loadRateConfig, resolveRates } from "../services/rates";
 
 const createBody = z.object({ lottery: z.enum(["thai", "lao"]), drawDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันที่ต้องเป็น YYYY-MM-DD") });
 
@@ -24,8 +25,21 @@ export function periodsRouter() {
   });
 
   r.patch("/:id/limited-numbers", async (req, res) => {
-    const { numbers } = parse(z.object({ numbers: z.array(z.string().regex(/^\d{1,3}$/)).max(200) }), req.body);
-    const period = await Period.findByIdAndUpdate(req.params.id, { $set: { limitedNumbers: [...new Set(numbers)] } }, { returnDocument: "after" }).lean();
+    const { numbers, closedNumbers, limits, rates, limitedRates: limitedRateConfig } = parse(z.object({
+      numbers: z.array(z.string().regex(/^\d{1,3}$/)).max(200),
+      closedNumbers: z.array(z.string().regex(/^\d{1,3}$/)).max(200).default([]),
+      limits: z.record(z.string().regex(/^\d{1,3}$/), z.number().positive().max(100_000_000)).default({}),
+      rates: z.record(z.string(), z.number().positive().max(100_000_000)).optional(),
+      limitedRates: z.record(z.string().regex(/^\d{1,3}$/), z.record(z.string(), z.number().positive().max(100_000_000))).optional(),
+      limitedRate: z.record(z.string(), z.number().positive().max(100_000_000)).optional(),
+    }), req.body);
+    const uniqueNumbers = [...new Set(numbers)];
+    const uniqueClosedNumbers = [...new Set(closedNumbers)];
+    const normalRates = resolveRates(await loadRateConfig(), rates ?? {});
+    const limitedRate = uniqueNumbers.length > 0 ? Object.fromEntries(Object.entries(normalRates).map(([type, value]) => [type, value / 2])) : {};
+    const limitedAmounts = Object.fromEntries(uniqueNumbers.filter((number) => limits[number] !== undefined).map((number) => [number, limits[number]]));
+    const limitedRates = Object.fromEntries(uniqueNumbers.filter((number) => limitedRateConfig?.[number] !== undefined).map((number) => [number, limitedRateConfig?.[number]]));
+    const period = await Period.findByIdAndUpdate(req.params.id, { $set: { limitedNumbers: uniqueNumbers, closedNumbers: uniqueClosedNumbers, limitedAmounts, rates: rates ?? {}, limitedRates, limitedRate: limitedRate ?? {} } }, { returnDocument: "after" }).lean();
     if (!period) throw new HttpError(404, "ไม่พบงวด");
     res.json(pubPeriod(period));
   });

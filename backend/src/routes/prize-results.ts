@@ -26,10 +26,11 @@ export function prizeResultsRouter() {
     const spec = PRIZE_SPEC[period.lottery as "thai" | "lao"];
     const normalized = spec.map((s) => {
       const numbers = groups.find((g) => g.key === s.key)?.numbers ?? [];
-      if (numbers.length !== s.count || numbers.some((n) => n.length !== s.digits)) {
-        throw new HttpError(400, `${s.label} ต้องมี ${s.count} ตัว ตัวละ ${s.digits} หลัก`);
+      const isRun = s.key === "runTop" || s.key === "runBottom";
+      if (numbers.length !== s.count || numbers.some((n) => isRun ? n.length < 1 || n.length > s.digits : n.length !== s.digits)) {
+        throw new HttpError(400, `${s.label} ต้องกรอก ${isRun ? `1–${s.digits}` : s.digits} หลัก`);
       }
-      return { key: s.key, label: s.label, numbers };
+      return { key: s.key, label: s.label, numbers: isRun ? [Array.from(new Set(numbers[0])).join("")] : numbers };
     });
 
     const doc = await PrizeResultModel.findOneAndUpdate(

@@ -34,13 +34,19 @@ function PrizeResultForm({ period, existing, onSaved, onClose }: Omit<Props, "op
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       spec.flatMap((s) =>
-        Array.from({ length: s.count }, (_, i) => [`${s.key}-${i}`, existing?.groups.find((g) => g.key === s.key)?.numbers[i] ?? ""]),
+        Array.from({ length: s.count }, (_, i) => {
+          const saved = existing?.groups.find((g) => g.key === s.key)?.numbers[i];
+          const first = existing?.groups.find((g) => g.key === "first")?.numbers[0] ?? "";
+          const last2 = existing?.groups.find((g) => g.key === "last2")?.numbers[0] ?? "";
+          const fallback = s.key === "runTop" ? [...new Set(first.slice(-3))].join("") : s.key === "runBottom" ? [...new Set(last2)].join("") : "";
+          return [`${s.key}-${i}`, saved ?? fallback];
+        }),
       ),
     ),
   );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -48,14 +54,15 @@ function PrizeResultForm({ period, existing, onSaved, onClose }: Omit<Props, "op
     for (const s of spec) {
       for (let i = 0; i < s.count; i++) {
         const key = `${s.key}-${i}`;
-        if (!new RegExp(`^\\d{${s.digits}}$`).test(values[key])) next[key] = `กรอกตัวเลข ${s.digits} หลัก`;
+        const isRun = s.key === "runTop" || s.key === "runBottom";
+        if (!(isRun ? new RegExp(`^\\d{1,${s.digits}}$`) : new RegExp(`^\\d{${s.digits}}$`)).test(values[key])) next[key] = isRun ? `กรอกเลขวิ่ง 1–${s.digits} หลัก` : `กรอกตัวเลข ${s.digits} หลัก`;
       }
     }
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
     setSaving(true);
-    setFailed(false);
+    setFailed(null);
     try {
       const { persisted } = await savePrizeResult({
         periodId: period.id,
@@ -71,10 +78,10 @@ function PrizeResultForm({ period, existing, onSaved, onClose }: Omit<Props, "op
         onSaved();
         onClose();
       } else {
-        setFailed(true);
+        setFailed("บันทึกผลรางวัลไม่สำเร็จ");
       }
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      setFailed(error instanceof Error ? error.message : "บันทึกผลรางวัลไม่สำเร็จ");
     } finally {
       setSaving(false);
     }
@@ -125,7 +132,7 @@ function PrizeResultForm({ period, existing, onSaved, onClose }: Omit<Props, "op
       </div>
       {failed && (
         <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
-          บันทึกไม่สำเร็จ เบราว์เซอร์ไม่อนุญาตให้เก็บข้อมูล (เช่น โหมดส่วนตัว) กรุณาลองใหม่
+          {failed}
         </p>
       )}
 

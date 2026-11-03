@@ -17,7 +17,9 @@ const NONE = "__none__";
 export interface PaymentDefaults {
   collectorId?: string;
   customerId?: string;
+  billId?: string;
   amount?: number;
+  note?: string;
 }
 
 interface Props {
@@ -59,7 +61,7 @@ function PaymentForm({ direction, dealers, outstanding, defaults, lottery, onSav
   const [customerId, setCustomerId] = useState(defaults.customerId ?? NONE);
   const [lotteryValue, setLotteryValue] = useState<Lottery>(lottery);
   const [amount, setAmount] = useState(defaults.amount ? String(defaults.amount) : "");
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(defaults.note ?? "");
   const [errors, setErrors] = useState<{ amount?: string }>({});
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -75,7 +77,7 @@ function PaymentForm({ direction, dealers, outstanding, defaults, lottery, onSav
     e.preventDefault();
     const value = Number(amount);
     let error: string | undefined;
-    if (!Number.isInteger(value) || value <= 0) error = "กรอกจำนวนเงินเป็นจำนวนเต็มที่มากกว่า 0";
+    if (!Number.isFinite(value) || value <= 0) error = "กรอกจำนวนเงินที่มากกว่า 0";
     else if (reducesDebt && owed === 0) error = `${customer!.name} ไม่มียอดค้างชำระ`;
     else if (reducesDebt && value > owed) error = `เกินยอดค้างของ ${customer!.name} (ค้าง ${formatNumber(owed)} บาท)`;
     setErrors({ amount: error });
@@ -88,6 +90,7 @@ function PaymentForm({ direction, dealers, outstanding, defaults, lottery, onSav
       const { persisted, payment } = await savePayment({
         collectorId: collector.id,
         customerId: customer?.id ?? null,
+        billId: defaults.billId ?? null,
         lottery: lotteryValue,
         direction,
         amount: value,
@@ -163,7 +166,7 @@ function PaymentForm({ direction, dealers, outstanding, defaults, lottery, onSav
           </Select>
         </Field>
         <Field label="จำนวนเงิน (บาท)" error={errors.amount}>
-          <Input type="number" min={1} inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
+          <Input type="number" min={0.01} step="0.01" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
         </Field>
       </div>
 

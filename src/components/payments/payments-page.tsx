@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeftRight, Plus } from "@/components/icons";
 import { TopBar } from "@/components/layout/top-bar";
 import { ReportFilters, type DateRange } from "@/components/reports/report-filters";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { ErrorState } from "@/components/ui/state-panels";
 import { useDealersData } from "@/hooks/use-dealers-data";
 import { useRemote } from "@/hooks/use-remote";
@@ -19,30 +20,67 @@ import { PaymentKpis } from "./payment-kpis";
 import { PaymentTable } from "./payment-table";
 import { ReceivablesCard } from "./receivables-card";
 
-const OCTOBER: DateRange = { from: "2026-10-01", to: "2026-10-31" };
-const SECOND_HALF: DateRange = { from: "2026-10-16", to: "2026-10-31" };
-const PRESETS = [
-  { label: "ตุลาคม 2569", range: OCTOBER },
-  { label: "16–31 ต.ค.", range: SECOND_HALF },
-];
-
 interface DialogState {
   direction: "in" | "out";
   defaults: PaymentDefaults;
 }
 
+function currentMonthRange(): DateRange {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return {
+    from: `${year}-${pad(month + 1)}-01`,
+    to: `${year}-${pad(month + 1)}-${pad(new Date(year, month + 1, 0).getDate())}`,
+  };
+}
+
 export function PaymentsPage() {
   const [lottery, setLottery] = useState<LotteryValue>("all");
-  const [range, setRange] = useState<DateRange>(OCTOBER);
+  const [periodId, setPeriodId] = useState("all");
+  const [range, setRange] = useState<DateRange>({ from: "", to: "" });
   const [nonce, setNonce] = useState(0);
   const [dialog, setDialog] = useState<DialogState | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const data = useDealersData(nonce, () => ({ lottery, periodId: null, ...range }));
-  const payments = useRemote(`payments-${nonce}-${lottery}-${range.from}-${range.to}`, () => fetchPayments({ lottery, ...range }), { keepPrevious: true });
+  useEffect(() => {
+    // Next.js ห้ามอ่านเวลาปัจจุบันระหว่าง prerender ของ Client Component
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRange(currentMonthRange());
+  }, []);
+
+  useEffect(() => {
+    const value = new URLSearchParams(window.location.search).get("lottery");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- อ่านค่าตัวกรองจาก URL หลัง hydration
+    if (value === "thai" || value === "lao") setLottery(value);
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payPrize = params.get("payPrize") === "1";
+    if (params.get("receive") !== "1" && !payPrize) return;
+    const collectorId = params.get("collectorId") ?? undefined;
+    const customerId = params.get("customerId") ?? undefined;
+    const billId = params.get("billId") ?? undefined;
+    const amount = Number(params.get("amount"));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- เปิดฟอร์มรับเงินจากลิงก์ที่ส่งมาจากบิล
+    setDialog({ direction: payPrize ? "out" : "in", defaults: { collectorId, customerId, billId, amount: Number.isFinite(amount) && amount > 0 ? amount : undefined, note: payPrize ? "จ่ายเงินรางวัล" : undefined } });
+    window.history.replaceState({}, "", "/payments");
+  }, []);
+
+  const data = useDealersData(nonce, () => range.from && range.to ? ({ lottery, periodId: periodId === "all" ? null : periodId, ...range }) : null);
+  const payments = useRemote(`payments-${nonce}-${lottery}-${range.from}-${range.to}`, range.from && range.to ? () => fetchPayments({ lottery, ...range }) : null, { keepPrevious: true });
   const outstanding = useRemote(`outstanding-${nonce}`, fetchOutstanding);
 
   const { dealers, periods, ledger } = data;
+  const allDates = (periods ?? []).map((p) => p.drawDate).sort();
+  const presets = [
+    ...(allDates.length ? [{ label: "ทุกงวด", range: { from: allDates[0], to: allDates[allDates.length - 1] } }] : []),
+  ];
+  const periodOptions = (periods ?? [])
+    .filter((p) => lottery === "all" || p.lottery === lottery)
+    .sort((a, b) => b.drawDate.localeCompare(a.drawDate));
   const ready = !!(dealers && periods && ledger && payments.data);
   const refreshing = ready && (data.ledgerLoading || payments.loading);
   const failed = data.error || payments.error || outstanding.error;
@@ -98,7 +136,15 @@ export function PaymentsPage() {
           </div>
         </div>
 
-        <ReportFilters lottery={lottery} onLotteryChange={setLottery} range={range} onRangeChange={setRange} presets={PRESETS} />
+        <ReportFilters lottery={lottery} onLotteryChange={(value) => { setLottery(value); setPeriodId("all"); }} range={range} onRangeChange={setRange} presets={presets}>
+          <Select value={periodId} onValueChange={setPeriodId}>
+            <SelectTrigger className="w-full sm:w-44" aria-label="งวด" />
+            <SelectContent>
+              <SelectItem value="all">ทุกงวด</SelectItem>
+              {periodOptions.map((period) => <SelectItem key={period.id} value={period.id}>{formatDate(period.drawDate)} · {period.lottery === "thai" ? "หวยไทย" : "หวยลาว"}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </ReportFilters>
 
         {notice && (
           <div role="status" className="mb-4 flex items-start justify-between gap-3 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800">

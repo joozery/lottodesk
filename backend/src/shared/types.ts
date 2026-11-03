@@ -8,6 +8,11 @@ export interface Period {
   drawDate: string;
   status: "confirmed" | "pending";
   limitedNumbers?: string[];
+  closedNumbers?: string[];
+  limitedAmounts?: Record<string, number>;
+  limitedRates?: Record<string, Partial<Rates>>;
+  limitedRate?: Partial<Rates>;
+  rates?: Partial<Rates>;
 }
 
 export interface Customer {
@@ -52,12 +57,16 @@ export interface Bill {
   amount: number;
   grossAmount?: number;
   discountPercent?: number;
+  specialDiscountPercent?: number;
+  specialNumberDiscountPercent?: number;
+  specialRunDiscountPercent?: number;
   discountAmount?: number;
   lines: BetLine[];
   /** เงินรางวัล คำนวณจากผลรางวัลของงวด (0 ถ้ายังไม่มีผล) */
   prize: number;
   /** อัตราจ่ายที่ใช้คำนวณบิลนี้ (ตามเจ้ามือ/ลูกค้า) — ไม่ระบุ = อัตราเริ่มต้น */
   rates?: Rates;
+  rateOverrides?: Record<string, Partial<Rates>>;
   /** ยอดค้างชำระของบิลนี้ (0 = ชำระแล้ว) */
   outstanding: number;
   createdAt: string;
@@ -83,6 +92,7 @@ export interface Payment {
   note: string;
   /** ลูกค้าที่เกี่ยวข้อง (รับเงินจากลูกค้ารายนี้ → หักยอดค้างชำระ) */
   customerId?: string | null;
+  billId?: string | null;
   /** true = ผู้ใช้บันทึกเอง (เก็บในเบราว์เซอร์), ไม่มี = ข้อมูลตัวอย่าง */
   recorded?: boolean;
 }

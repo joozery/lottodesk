@@ -55,17 +55,22 @@ export async function computeExposure(periodId: string): Promise<Exposure> {
 
 /** ส่วนลดตั้งต้นและส่วนลดขั้นบันไดแยกตามประเภทการแทง */
 export interface DiscountTier { threshold: number; percent: number }
-export type DiscountDefaults = Record<BetType, number>;
+export interface DiscountDefaults { number: number; run: number }
 export type DiscountTiers = DiscountTier[];
 export interface DiscountConfig { defaults: DiscountDefaults; tiers: DiscountTiers }
-export const DEFAULT_DISCOUNTS: DiscountDefaults = Object.fromEntries(BET_TYPES.map((type) => [type, 0])) as DiscountDefaults;
+export const DEFAULT_DISCOUNTS: DiscountDefaults = { number: 0, run: 0 };
 
 export async function loadDiscount(): Promise<DiscountConfig> {
   const doc = await AppSetting.findById("discount").lean();
   const value = (doc?.value ?? {}) as Record<string, unknown>;
   const rawDefaults = value.defaults && typeof value.defaults === "object" ? value.defaults as Record<string, unknown> : value;
   const legacyDefault = typeof value.below === "number" ? value.below : 0;
-  const defaults = Object.fromEntries(BET_TYPES.map((type) => [type, typeof rawDefaults[type] === "number" ? rawDefaults[type] : legacyDefault])) as DiscountDefaults;
+  const legacyNumber = typeof rawDefaults.top3 === "number" ? rawDefaults.top3 : legacyDefault;
+  const legacyRun = typeof rawDefaults.runTop === "number" ? rawDefaults.runTop : legacyNumber;
+  const defaults: DiscountDefaults = {
+    number: typeof rawDefaults.number === "number" ? rawDefaults.number : legacyNumber,
+    run: typeof rawDefaults.run === "number" ? rawDefaults.run : legacyRun,
+  };
   const rawTiers = value.tiers;
   const legacyTiers = rawTiers && typeof rawTiers === "object" && !Array.isArray(rawTiers) ? rawTiers as Record<string, unknown> : {};
   const rows = Array.isArray(rawTiers) ? rawTiers : Object.values(legacyTiers).find(Array.isArray) ?? [];

@@ -15,6 +15,9 @@ import { describeBill, matchesQuery, matchesStatus, resultOf, SORTERS, type Bill
 import { formatDate, lotteryLabel } from "@/lib/format";
 import type { LotteryFilter as LotteryValue } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useRemote } from "@/hooks/use-remote";
+import { DEFAULT_DISCOUNT_CONFIG, normalizeDiscounts } from "@/lib/discount";
+import { fetchDiscountTier } from "@/services/risk-service";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { BillDetailDrawer } from "./bill-detail-drawer";
 import { BillDetailPanel } from "./bill-detail-panel";
@@ -22,6 +25,9 @@ import { BillKpis, type BillTotals } from "./bill-kpis";
 import { BillList, PAGE_SIZE } from "./bill-list";
 import { BillToolbar } from "./bill-toolbar";
 import { GroupedBillDetail, GroupedBillList } from "./grouped-bill-list";
+import { GroupedBillDiscountEditor } from "./grouped-bill-discount-editor";
+import { GroupedBillReceiveButton } from "./grouped-bill-receive-button";
+import { GroupedWinningLines } from "./grouped-winning-lines";
 
 const OCTOBER: DateRange = { from: "2026-10-01", to: "2026-10-31" };
 const SECOND_HALF: DateRange = { from: "2026-10-16", to: "2026-10-31" };
@@ -34,11 +40,13 @@ export function BillsPage() {
   const [sort, setSort] = useState<SortKey>("newest");
   const [page, setPage] = useState(1);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [dealerId, setDealerId] = useState("all");
   const [collectorId, setCollectorId] = useState("all");
+  const [periodId, setPeriodId] = useState("all");
   const [nonce, setNonce] = useState(0);
   const [grouped, setGrouped] = useState(true);
   const [groupDetail, setGroupDetail] = useState<BillView[] | null>(null);
+  const { data: discountTier } = useRemote("bills-discount-tier", fetchDiscountTier);
+  const discountConfig = normalizeDiscounts(discountTier ?? DEFAULT_DISCOUNT_CONFIG);
   const rangeInitialized = useRef(false);
 
   const data = useDealersData(nonce, () => ({ lottery, periodId: null, ...range }));
@@ -61,10 +69,11 @@ export function BillsPage() {
 
   const periodMap = new Map((periods ?? []).map((p) => [p.id, p]));
   const dealerList = dealers ?? [];
-  const collectorList = (dealerId === "all" ? dealerList : dealerList.filter((d) => d.id === dealerId)).flatMap((d) => d.collectors);
+  const collectorList = dealerList.flatMap((d) => d.collectors);
+  const periodOptions = (periods ?? []).filter((p) => lottery === "all" || p.lottery === lottery).sort((a, b) => b.drawDate.localeCompare(a.drawDate));
   const scoped = ready
     ? ledger.bills.filter((b) =>
-        collectorId !== "all" ? b.collectorId === collectorId : dealerId === "all" || collectorList.some((c) => c.id === b.collectorId),
+        (periodId === "all" || b.periodId === periodId) && (collectorId === "all" || b.collectorId === collectorId),
       )
     : null;
   const all = scoped && dealers ? scoped.map((b) => describeBill(b, dealers, periodMap.get(b.periodId))) : null;
@@ -104,13 +113,12 @@ export function BillsPage() {
   function exportCsv() {
     if (!filtered) return;
     downloadCsv(`lottodesk-bills-${range.from}_${range.to}.csv`, [
-      ["เลขบิล", "วันเวลา", "ลูกค้า", "ผู้รวบรวม", "เจ้ามือ", "ประเภทหวย", "งวด", "ยอดซื้อ", "เงินรางวัล", "ค้างชำระ", "ผลรางวัล", "การชำระ"],
+      ["เลขบิล", "วันเวลา", "ลูกค้า", "ผู้รวบรวม", "ประเภทหวย", "งวด", "ยอดซื้อ", "เงินรางวัล", "ค้างชำระ", "ผลรางวัล", "การชำระ"],
       ...filtered.map((v) => [
         v.bill.no,
         v.bill.createdAt,
         v.customer,
         v.collector,
-        v.dealer,
         lotteryLabel[v.bill.lottery],
         v.period?.drawDate ?? "",
         v.bill.amount,
@@ -146,12 +154,12 @@ export function BillsPage() {
           </div>
         </div>
 
-        <ReportFilters lottery={lottery} onLotteryChange={reset(setLottery)} range={range} onRangeChange={reset(setRange)} presets={presets}>
-          <Select value={dealerId} onValueChange={(v) => { setDealerId(v); setCollectorId("all"); setPage(1); }}>
-            <SelectTrigger className="w-full sm:w-44" aria-label="เจ้ามือ" />
+        <ReportFilters lottery={lottery} onLotteryChange={(value) => { setLottery(value); setPeriodId("all"); setPage(1); }} range={range} onRangeChange={reset(setRange)} presets={presets}>
+          <Select value={periodId} onValueChange={(value) => { setPeriodId(value); setPage(1); }}>
+            <SelectTrigger className="w-full sm:w-44" aria-label="งวด" />
             <SelectContent>
-              <SelectItem value="all">เจ้ามือทั้งหมด</SelectItem>
-              {dealerList.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+              <SelectItem value="all">ทุกงวด</SelectItem>
+              {periodOptions.map((period) => <SelectItem key={period.id} value={period.id}>{formatDate(period.drawDate)} · {lotteryLabel[period.lottery]}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={collectorId} onValueChange={(v) => { setCollectorId(v); setPage(1); }}>
@@ -182,8 +190,8 @@ export function BillsPage() {
               <div className="flex justify-end"><Button variant="outline" size="sm" onClick={() => { setGrouped((value) => !value); setGroupDetail(null); }}>{grouped ? "ดูแยกรายบิล" : "ดูรวมลูกค้าหลัก"}</Button></div>
               {grouped ? <GroupedBillList rows={filtered} filtered={status !== "all" || query.trim() !== ""} onSelectGroup={setGroupDetail} /> : <BillList rows={visible} total={total} page={currentPage} onPage={setPage} onOpen={setOpenId} selectedId={panelView?.bill.id ?? null} filtered={status !== "all" || query.trim() !== ""} />}
               </div>
-              <aside aria-label="รายละเอียดบิล" className="sticky top-[72px] hidden max-h-[calc(100vh-88px)] overflow-y-auto rounded-xl border border-slate-200 bg-white xl:block">
-                {grouped && groupDetail ? <GroupedBillDetail rows={groupDetail} /> : panelView ? <BillDetailPanel key={panelView.bill.id} view={panelView} /> : (
+              <aside aria-label="รายละเอียดบิล" className="sticky top-[72px] hidden h-[calc(100vh-88px)] min-h-0 overscroll-contain overflow-y-auto rounded-xl border border-slate-200 bg-white xl:block">
+                {grouped && groupDetail ? <><div className="flex gap-2 px-4"><GroupedBillReceiveButton rows={groupDetail} />{(() => { const prize = groupDetail.reduce((sum, row) => sum + row.bill.prize, 0); if (prize <= 0) return null; const query = new URLSearchParams({ payPrize: "1", collectorId: groupDetail[0].bill.collectorId, amount: String(prize), lottery: groupDetail[0].bill.lottery }); return <Link href={`/payments?${query.toString()}`} className="inline-flex h-9 items-center rounded-md bg-rose-600 px-3 text-sm font-medium text-white hover:bg-rose-700">จ่ายเงินรางวัล</Link>; })()}</div><GroupedBillDiscountEditor key={groupDetail.map((row) => row.bill.id).join("|")} rows={groupDetail} discountConfig={discountConfig} onSaved={() => { setGroupDetail(null); setNonce((n) => n + 1); }} /><GroupedWinningLines rows={groupDetail} /><div className="mx-4 mb-0 flex items-center justify-between border-b border-slate-100 pb-3 text-sm"><span className="font-medium text-slate-600">ยอดจ่าย</span><span className="font-semibold text-emerald-700">{groupDetail.reduce((sum, row) => sum + row.bill.prize, 0).toLocaleString("th-TH")} บาท</span></div><GroupedBillDetail rows={groupDetail} /></> : panelView ? <BillDetailPanel key={panelView.bill.id} view={panelView} /> : (
                   <p className="p-8 text-center text-sm text-slate-500">{all ? "เลือกบิลเพื่อดูรายละเอียด" : "กำลังโหลด..."}</p>
                 )}
               </aside>

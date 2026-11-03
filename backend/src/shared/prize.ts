@@ -26,9 +26,10 @@ export interface PrizeSpecItem {
 export const PRIZE_SPEC: Record<Lottery, PrizeSpecItem[]> = {
   thai: [
     { key: "first", label: "รางวัลที่ 1", digits: 6, count: 1, primary: true },
-    { key: "front3", label: "เลขหน้า 3 ตัว", digits: 3, count: 2 },
     { key: "last3", label: "เลขท้าย 3 ตัว", digits: 3, count: 2 },
     { key: "last2", label: "เลขท้าย 2 ตัว", digits: 2, count: 1 },
+    { key: "runTop", label: "วิ่งบน (เลขไม่ซ้ำ)", digits: 3, count: 1 },
+    { key: "runBottom", label: "วิ่งล่าง (เลขไม่ซ้ำ)", digits: 2, count: 1 },
   ],
   lao: [
     { key: "four", label: "เลข 4 ตัว", digits: 4, count: 1, primary: true },

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { HttpError, parse } from "../middleware/http";
 import { Dealer, Payment } from "../models";
 import { pubPayment } from "../serialize";
-import { applyReceipt, outstandingByCustomer } from "../services/payments";
+import { applyReceipt, applyReceiptByBill, applyReceiptByCollector, outstandingByCustomer } from "../services/payments";
 
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const listQuery = z.object({ lottery: z.enum(["all", "thai", "lao"]).default("all"), from: day, to: day });
@@ -15,6 +15,7 @@ const createBody = z.object({
   note: z.string().trim().max(300).default(""),
   /** ลูกค้าที่รับเงินจาก (direction = in) — หักยอดค้างชำระ */
   customerId: z.string().min(1).nullable().default(null),
+  billId: z.string().min(1).nullable().default(null),
 });
 
 /** วัน (เวลาไทย) → ช่วงเวลา UTC ครึ่งเปิด [start, end) */
@@ -45,7 +46,11 @@ export function paymentsRouter() {
     if (!collector) throw new HttpError(400, "ไม่พบผู้ส่งโพย");
     if (body.customerId && !collector.customers.some((c) => c._id === body.customerId)) throw new HttpError(400, "ไม่พบลูกค้าในผู้ส่งโพยนี้");
 
-    if (body.direction === "in" && body.customerId) await applyReceipt(body.customerId, body.amount);
+    if (body.direction === "in") {
+      if (body.billId) await applyReceiptByBill(body.billId, body.amount, body.collectorId);
+      else if (body.customerId) await applyReceipt(body.customerId, body.amount);
+      else await applyReceiptByCollector(body.collectorId, body.amount);
+    }
     const payment = await Payment.create({ ...body, periodId: "", recorded: true });
     res.status(201).json(pubPayment(payment.toObject()));
   });

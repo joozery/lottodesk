@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from "react";
 import Link from "next/link";
 import { ArrowLeftRight, Keyboard, Layers3, Pencil, Plus, Printer, Search, Trash2, Upload } from "@/components/icons";
 import { LotteryFilter } from "@/components/dealers/lottery-filter";
@@ -16,7 +16,7 @@ import { formatDate, formatNumber } from "@/lib/format";
 import { BET_LABEL } from "@/lib/prize-calc";
 import type { BetLine, Lottery, Period } from "@/lib/types";
 import { fetchDiscountTier } from "@/services/risk-service";
-import { createBill, createCollector, createCustomer, fetchDealers, fetchLedger, fetchPeriods, updateLimitedNumbers } from "@/services/dealers-service";
+import { createBill, createCollector, createCustomer, fetchDealers, fetchLedger, fetchPeriods } from "@/services/dealers-service";
 
 type EntryType = "2" | "3" | "run";
 type EntryRow = { id: string; number: string; type: EntryType; top: number; tod: number; bottom: number };
@@ -29,6 +29,23 @@ const rowTotal = (row: EntryRow) => row.top + row.tod + row.bottom;
 const sheetKey = (lottery: Lottery, periodId: string, dealerId: string, collectorId: string, customerId: string, sheet: number) =>
   [lottery, periodId, dealerId, collectorId, customerId, sheet].join("|");
 
+function uniquePermutations(value: string) {
+  const result = new Set<string>();
+
+  function visit(prefix: string, remaining: string[]) {
+    if (remaining.length === 0) {
+      result.add(prefix);
+      return;
+    }
+    remaining.forEach((digit, index) => {
+      visit(prefix + digit, [...remaining.slice(0, index), ...remaining.slice(index + 1)]);
+    });
+  }
+
+  visit("", value.split(""));
+  return [...result];
+}
+
 function amountsFor(rows: EntryRow[]) {
   return rows.reduce((totals, row) => ({
     top: totals.top + row.top,
@@ -40,6 +57,10 @@ function amountsFor(rows: EntryRow[]) {
 
 function localDate() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+function entryTypeForNumber(value: string): EntryType {
+  return value.length === 1 ? "run" : value.length === 2 ? "2" : "3";
 }
 
 function preferredPeriod(periods: Period[], lottery: Lottery) {
@@ -70,7 +91,7 @@ export function EntryPage() {
 
   const [lottery, setLottery] = useState<Lottery>("thai");
   const [periodChoice, setPeriodChoice] = useState<string | null>(null);
-  const [dealerChoice, setDealerChoice] = useState("");
+  const [, setDealerChoice] = useState("");
   const [collectorChoice, setCollectorChoice] = useState("");
   const [customerChoice, setCustomerChoice] = useState("");
   const [sheet, setSheet] = useState(1);
@@ -90,8 +111,6 @@ export function EntryPage() {
   const [addingCollector, setAddingCollector] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [paidInput, setPaidInput] = useState("");
-  const [limitedInput, setLimitedInput] = useState<string | null>(null);
-  const [savingSettings, setSavingSettings] = useState(false);
   const [sheets, setSheets] = useState<SheetMap>(initialSheets);
   const [savedSheets, setSavedSheets] = useState<SheetMap>(initialSheets);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -120,8 +139,10 @@ export function EntryPage() {
     return () => { active = false; };
   }, []);
 
-  const dealer = dealerChoice ? dealers.find((d) => d.id === dealerChoice) : dealers[0];
-  const collector = collectorChoice ? dealer?.collectors.find((c) => c.id === collectorChoice) : dealer?.collectors[0];
+  const collectorOptions = dealers.flatMap((d) => d.collectors.map((collector) => ({ dealer: d, collector })));
+  const selectedCollector = collectorChoice ? collectorOptions.find((item) => item.collector.id === collectorChoice) : undefined;
+  const dealer = selectedCollector?.dealer ?? dealers[0];
+  const collector = selectedCollector?.collector ?? dealer?.collectors[0];
   const customers = collector?.customers ?? [];
   const customer = customerChoice ? customers.find((c) => c.id === customerChoice) : customers[0];
   const periodOptions = periods.filter((p) => p.lottery === lottery).sort((a, b) => b.drawDate.localeCompare(a.drawDate));
@@ -154,6 +175,14 @@ export function EntryPage() {
   const customerReceived = customerBilled - customerOwed;
   const limitedNumbers = period?.limitedNumbers ?? [];
   const limitedSet = new Set(limitedNumbers);
+  const closedSet = new Set(period?.closedNumbers ?? []);
+  const limitedAmounts: Record<string, number> = {};
+  const purchasedByNumber = new Map<string, number>();
+  for (const bill of ledgerRemote.data?.bills ?? []) for (const line of bill.lines) purchasedByNumber.set(line.number, (purchasedByNumber.get(line.number) ?? 0) + line.amount);
+  const draftByNumber = new Map<string, number>();
+  for (const row of allRows) draftByNumber.set(row.number, (draftByNumber.get(row.number) ?? 0) + rowTotal(row));
+  const exceededNumbers = new Set([...draftByNumber.keys()].filter((value) => limitedAmounts[value] !== undefined && (purchasedByNumber.get(value) ?? 0) + (draftByNumber.get(value) ?? 0) > limitedAmounts[value]));
+  const excessByNumber = (value: string) => Math.max(0, Math.round(((purchasedByNumber.get(value) ?? 0) + (draftByNumber.get(value) ?? 0) - (limitedAmounts[value] ?? 0)) * 100) / 100);
   const sheetNumbers = Array.from(new Set([1, 2, 3, ...Object.keys(sheets).filter((k) => k.startsWith(`${prefix}|`)).map((k) => Number(k.split("|").at(-1)))]))
     .filter((n) => Number.isInteger(n) && n > 0).sort((a, b) => a - b);
   const dirty = JSON.stringify(sheets) !== JSON.stringify(savedSheets);
@@ -186,6 +215,7 @@ export function EntryPage() {
 
   function clearEntry(clearAmounts = false) {
     setNumber("");
+    setEntryType("3");
     setEditingId(null);
     if (clearAmounts) { setTop(""); setTod(""); setBottom(""); }
     numberRef.current?.focus();
@@ -196,6 +226,11 @@ export function EntryPage() {
     if (!open) { setNotice("งวดนี้ปิดรับแล้ว กรุณาเลือกงวดที่เปิดรับ"); return; }
     const digits = entryType === "run" ? 1 : Number(entryType);
     if (!new RegExp(`^\\d{${digits}}$`).test(number)) { setNotice(`กรุณากรอกเลข ${digits} หลัก`); numberRef.current?.focus(); return; }
+    const variants = reverse && !editingId
+      ? entryType === "3" ? uniquePermutations(number) : [number, number.split("").reverse().join("")]
+      : [number];
+    const closedVariant = variants.find((value) => closedSet.has(value));
+    if (closedVariant) { setNotice(`เลข ${closedVariant} ปิดรับในงวดนี้ ไม่สามารถซื้อได้`); return; }
     const amounts = { top: Number(top || 0), tod: entryType === "3" ? Number(tod || 0) : 0, bottom: Number(bottom || 0) };
     if (Object.values(amounts).some((n) => !Number.isFinite(n) || n < 0) || Object.values(amounts).every((n) => n === 0)) {
       setNotice("กรุณากรอกยอดเงินที่มากกว่า 0"); return;
@@ -203,11 +238,13 @@ export function EntryPage() {
     const nextRow: EntryRow = { id: editingId ?? `entry-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, number, type: entryType, ...amounts };
     const next = editingId ? rows.map((row) => row.id === editingId ? nextRow : row) : [...rows, nextRow];
     if (reverse && !editingId) {
-      const reversed = number.split("").reverse().join("");
-      if (reversed !== number) next.push({ ...nextRow, id: `entry-${Date.now()}-reverse`, number: reversed });
+      variants.slice(1).forEach((variant, index) => {
+        next.push({ ...nextRow, id: `entry-${Date.now()}-reverse-${index}`, number: variant });
+      });
     }
     updateRows(next);
-    if (limitedSet.has(number)) setNotice(`เลข ${number} เป็นเลขอั้นงวดนี้ กรุณาตรวจสอบก่อนออกบิล`);
+    if (exceededNumbers.has(number)) setNotice(`เลข ${number} เกินวงเงิน ${money(excessByNumber(number))} กรุณาตรวจสอบก่อนออกบิล`);
+    else if (limitedSet.has(number)) setNotice(`เลข ${number} เป็นเลขอั้นงวดนี้ กรุณาตรวจสอบก่อนออกบิล`);
     clearEntry(!lockAmount);
   }
 
@@ -270,6 +307,8 @@ export function EntryPage() {
 
   async function submitBill() {
     if (!collector || !period || !rows.length) return;
+    const closedLine = linesOf(rows).find((line) => closedSet.has(line.number));
+    if (closedLine) { setNotice(`เลข ${closedLine.number} ปิดรับในงวดนี้ ไม่สามารถซื้อได้`); return; }
     if (!Number.isFinite(discountPercent) || discountPercent < 0 || discountPercent > 100) { setNotice("ส่วนลดต้องอยู่ระหว่าง 0–100%"); return; }
     if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > netAmount) { setNotice("ยอดที่จ่ายต้องไม่เกินยอดสุทธิของบิล"); return; }
     setSubmitting(true);
@@ -290,16 +329,6 @@ export function EntryPage() {
     }
   }
 
-  async function saveLimitedNumbers() {
-    if (!period) return;
-    const numbers = [...new Set((limitedInput ?? "").split(/[\s,;]+/).filter(Boolean))];
-    if (numbers.some((value) => !/^\d{1,3}$/.test(value)) || numbers.length > 200) { setNotice("เลขอั้นต้องเป็นเลข 1–3 หลัก คั่นด้วยเว้นวรรคหรือจุลภาค (ไม่เกิน 200 เลข)"); return; }
-    setSavingSettings(true);
-    try { await updateLimitedNumbers(period.id, numbers); setLimitedInput(null); setNonce((n) => n + 1); setNotice("บันทึกเลขอั้นของงวดนี้แล้ว"); }
-    catch (e) { setNotice(e instanceof Error ? e.message : "บันทึกเลขอั้นไม่สำเร็จ"); }
-    finally { setSavingSettings(false); }
-  }
-
   function saveSheet() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sheets));
@@ -314,20 +343,16 @@ export function EntryPage() {
     if (!file) return;
     const imported = parseImportedRows(await file.text());
     if (!imported.length) { setNotice("ไม่พบรายการที่นำเข้าได้ ใช้คอลัมน์ เลข,บน,โต๊ด,ล่าง"); return; }
-    updateRows([...rows, ...imported]);
-    setNotice(`นำเข้า ${formatNumber(imported.length)} รายการแล้ว กรุณาตรวจสอบและบันทึกแผ่น`);
+    const allowed = imported.filter((row) => !closedSet.has(row.number));
+    updateRows([...rows, ...allowed]);
+    setNotice(allowed.length === imported.length ? `นำเข้า ${formatNumber(allowed.length)} รายการแล้ว กรุณาตรวจสอบและบันทึกแผ่น` : `นำเข้า ${formatNumber(allowed.length)} รายการแล้ว ข้ามเลขปิด ${formatNumber(imported.length - allowed.length)} รายการ`);
     if (fileRef.current) fileRef.current.value = "";
   }
 
   function handleShortcut(key: string) {
+    if (key === "F8") { setLockAmount((value) => !value); return true; }
+    if (key === "F9") { setReverse((value) => !value); return true; }
     const shortcuts: Record<string, { type: EntryType; field: "top" | "tod" | "bottom" }> = {
-      F1: { type: "2", field: "top" },
-      F2: { type: "3", field: "top" },
-      F3: { type: "2", field: "bottom" },
-      F4: { type: "3", field: "bottom" },
-      F5: { type: "3", field: "tod" },
-      F6: { type: "run", field: "top" },
-      F7: { type: "run", field: "bottom" },
     };
     const shortcut = shortcuts[key];
     if (!shortcut) return false;
@@ -338,6 +363,12 @@ export function EntryPage() {
       target.current?.focus();
     });
     return true;
+  }
+
+  function moveOnEnter(event: KeyboardEvent<HTMLInputElement>, next: RefObject<HTMLInputElement | null>) {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    next.current?.focus();
   }
 
   const categories = [
@@ -360,8 +391,8 @@ export function EntryPage() {
             <p className="mt-0.5 text-xs text-slate-500">เลือกงวด → เลือกลูกค้า → คีย์เลข → ตรวจยอด → บันทึกบิล</p>
           </div>
           <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
-            <LotteryFilter value={lottery} onChange={(value) => { if (value !== "all") { setLottery(value); setPeriodChoice(null); setLimitedInput(null); setPaidInput(""); } }} includeAll={false} />
-            <Select value={period?.id ?? ""} onValueChange={(id) => { setPeriodChoice(id); setLimitedInput(null); setPaidInput(""); }}>
+            <LotteryFilter value={lottery} onChange={(value) => { if (value !== "all") { setLottery(value); setPeriodChoice(null); setPaidInput(""); } }} includeAll={false} />
+            <Select value={period?.id ?? ""} onValueChange={(id) => { setPeriodChoice(id); setPaidInput(""); }}>
               <SelectTrigger className="w-40 flex-1 sm:w-44" aria-label="งวดหวย" />
               <SelectContent>{periodOptions.map((p) => <SelectItem key={p.id} value={p.id}>{formatDate(p.drawDate)}{p.status === "confirmed" ? " · ยืนยันผลแล้ว" : ""}</SelectItem>)}</SelectContent>
             </Select>
@@ -374,16 +405,16 @@ export function EntryPage() {
         ) : (
           <>
             <div className="mb-3 grid grid-cols-1 items-end gap-2.5 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2 lg:flex lg:flex-wrap lg:gap-3">
-              <label className="min-w-0 flex-1 text-xs font-medium text-slate-500">เจ้ามือ
-                <Select value={dealer.id} onValueChange={(id) => { setDealerChoice(id); const next = dealers.find((d) => d.id === id); setCollectorChoice(next?.collectors[0]?.id ?? ""); setCustomerChoice(next?.collectors[0]?.customers[0]?.id ?? ""); setSheet(1); setPaidInput(""); }}>
+              {false && <label className="hidden min-w-0 flex-1 text-xs font-medium text-slate-500">เจ้ามือ
+                {dealers.length > 1 && <Select value={dealer.id} onValueChange={(id) => { setDealerChoice(id); const next = dealers.find((d) => d.id === id); setCollectorChoice(next?.collectors[0]?.id ?? ""); setCustomerChoice(next?.collectors[0]?.customers[0]?.id ?? ""); setSheet(1); setPaidInput(""); }}>
                   <SelectTrigger className="mt-1" aria-label="เจ้ามือ" />
                   <SelectContent>{dealers.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </label>
+                </Select>}
+              </label>}
               <label className="min-w-0 flex-1 text-xs font-medium text-slate-500">ลูกค้าหลัก / ผู้ส่งโพย
-                <Select value={collector.id} onValueChange={(id) => { setCollectorChoice(id); setCustomerChoice(dealer.collectors.find((c) => c.id === id)?.customers[0]?.id ?? ""); setSheet(1); setPaidInput(""); }}>
+                <Select value={collector.id} onValueChange={(id) => { setCollectorChoice(id); setCustomerChoice(collectorOptions.find((item) => item.collector.id === id)?.collector.customers[0]?.id ?? ""); setSheet(1); setPaidInput(""); }}>
                   <SelectTrigger className="mt-1" aria-label="ผู้ส่งโพย" />
-                  <SelectContent>{dealer.collectors.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                  <SelectContent>{collectorOptions.map(({ collector: c }) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
               </label>
               <label className="min-w-0 flex-1 text-xs font-medium text-slate-500">ลูกค้าย่อย / เจ้าของบิล
@@ -407,14 +438,6 @@ export function EntryPage() {
               {addingCustomer && <form onSubmit={(e) => { void addCustomer(e); }} className="flex min-w-56 flex-1 gap-2"><Input value={newCustomer} onChange={(e) => setNewCustomer(e.target.value)} placeholder="ชื่อลูกค้าย่อย" aria-label="ชื่อลูกค้าย่อยใหม่" /><Button type="submit" size="sm">บันทึก</Button></form>}
             </div>
 
-            <div className="mb-3 grid gap-3 lg:grid-cols-2">
-              <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h2 className="font-bold text-[#102356]">1. เลขอั้นงวดนี้</h2>
-                <p className="mt-1 text-xs text-slate-500">ใส่เลขคั่นด้วยเว้นวรรคหรือจุลภาค ระบบจะเตือนเมื่อคีย์ตรงเลขอั้น</p>
-                <div className="mt-2 flex gap-2"><Input value={limitedInput ?? limitedNumbers.join(" ")} onChange={(e) => setLimitedInput(e.target.value)} placeholder="เช่น 12 34 567" aria-label="เลขอั้นงวดนี้" className="min-w-0 flex-1" /><Button variant="outline" onClick={() => void saveLimitedNumbers()} disabled={savingSettings || limitedInput === null}>บันทึก</Button></div>
-              </section>
-            </div>
-
             <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-3 lg:grid-cols-[200px_minmax(0,1fr)] xl:grid-cols-[200px_minmax(0,1fr)_260px]">
               <aside className="min-w-0 space-y-3 max-lg:order-3">
                 <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -433,23 +456,23 @@ export function EntryPage() {
 
               <div className="min-w-0 space-y-3 max-lg:order-1">
                 <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-3.5">
-                  <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-bold text-[#102356]">3. คีย์เลข</h2><div className="flex items-center gap-1 rounded-full border border-slate-200 p-0.5">{(["2", "3", "run"] as const).map((type) => <button key={type} type="button" onClick={() => { setEntryType(type); clearEntry(); }} className={`rounded-full px-3 py-1 text-xs font-semibold ${entryType === type ? "bg-blue-600 text-white" : "text-slate-600"}`}>{type === "run" ? "วิ่ง" : `${type} ตัว`}</button>)}</div></div>
+                  <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-bold text-[#102356]">3. คีย์เลข</h2><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">ระบบเลือกอัตโนมัติ: {entryType === "run" ? "วิ่ง" : `${entryType} ตัว`}</span></div>
                   <form onSubmit={addEntry} onKeyDown={(e) => { if (handleShortcut(e.key)) e.preventDefault(); if (e.key === "Escape") { e.preventDefault(); clearEntry(); } }} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(80px,1.2fr)_repeat(3,minmax(65px,0.8fr))_auto]">
-                    <label className="text-xs font-medium text-slate-600">เลข<Input ref={numberRef} value={number} onChange={(e) => setNumber(e.target.value.replace(/\D/g, ""))} maxLength={entryType === "run" ? 1 : Number(entryType)} inputMode="numeric" autoComplete="off" className="mt-1 h-9 font-mono text-lg" aria-label="เลข" /></label>
-                    <label className="text-xs font-medium text-slate-600">บน<Input ref={topRef} value={top} onChange={(e) => setTop(e.target.value)} type="number" min="0" inputMode="numeric" className="mt-1" aria-label="บน" /></label>
-                    <label className="text-xs font-medium text-slate-600">โต๊ด<Input ref={todRef} value={tod} onChange={(e) => setTod(e.target.value)} type="number" min="0" inputMode="numeric" disabled={entryType !== "3"} className="mt-1" aria-label="โต๊ด" /></label>
+                    <label className="text-xs font-medium text-slate-600">เลข<Input ref={numberRef} value={number} onChange={(e) => { const value = e.target.value.replace(/\D/g, "").slice(0, 3); setNumber(value); setEntryType(entryTypeForNumber(value)); }} onKeyDown={(e) => moveOnEnter(e, topRef)} maxLength={3} inputMode="numeric" autoComplete="off" className="mt-1 h-9 font-mono text-lg" aria-label="เลข" /></label>
+                    <label className="text-xs font-medium text-slate-600">บน<Input ref={topRef} value={top} onChange={(e) => setTop(e.target.value)} onKeyDown={(e) => moveOnEnter(e, entryType === "3" ? todRef : bottomRef)} type="number" min="0" inputMode="numeric" className="mt-1" aria-label="บน" /></label>
+                    <label className="text-xs font-medium text-slate-600">โต๊ด<Input ref={todRef} value={tod} onChange={(e) => setTod(e.target.value)} onKeyDown={(e) => moveOnEnter(e, bottomRef)} type="number" min="0" inputMode="numeric" disabled={entryType !== "3"} className="mt-1" aria-label="โต๊ด" /></label>
                     <label className="text-xs font-medium text-slate-600">ล่าง<Input ref={bottomRef} value={bottom} onChange={(e) => setBottom(e.target.value)} type="number" min="0" inputMode="numeric" className="mt-1" aria-label="ล่าง" /></label>
                     <Button type="submit" disabled={!open} className="col-span-2 sm:col-span-1"><Plus className="size-4" /> {editingId ? "อัปเดตรายการ" : "เพิ่มรายการ"}</Button>
                   </form>
-                  <div className="mt-2.5 flex flex-wrap items-center gap-4 text-xs text-slate-600"><label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={reverse} onChange={(e) => setReverse(e.target.checked)} className="accent-blue-600" /> กลับเลข</label><label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={lockAmount} onChange={(e) => setLockAmount(e.target.checked)} className="accent-blue-600" /> ล็อกยอดเงิน</label><span className="ml-auto text-slate-400">Enter เพิ่มรายการ · Tab ช่องถัดไป · Esc ล้างช่อง</span></div>
+                  <div className="mt-2.5 flex flex-wrap items-center gap-4 text-xs text-slate-600"><label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={reverse} onChange={(e) => setReverse(e.target.checked)} className="accent-blue-600" /> กลับเลข <span className="text-slate-400">(F9)</span></label><label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={lockAmount} onChange={(e) => setLockAmount(e.target.checked)} className="accent-blue-600" /> ล็อกยอดเงิน <span className="text-slate-400">(F8)</span></label><span className="ml-auto text-slate-400">Enter เพิ่มรายการ · Tab ช่องถัดไป · Esc ล้างช่อง</span></div>
                 </section>
                 <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2.5"><div className="flex items-center gap-2"><h2 className="text-base font-bold text-blue-700">แผ่นที่ {sheet}</h2><span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{formatNumber(rows.length)} รายการ</span></div><div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => updateRows(rows.map((row) => ({ ...row, number: row.number.split("").reverse().join("") })))} disabled={!rows.length || !open}><ArrowLeftRight className="size-4" /> กลับเลข</Button><input ref={fileRef} type="file" accept=".csv,.txt,text/csv,text/plain" className="hidden" onChange={(e) => void importFile(e.target.files?.[0])} /><Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={!open}><Upload className="size-4" /> นำเข้า</Button><Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="size-4" /> พิมพ์บิล</Button></div></div>
                   <div className="max-h-[45vh] space-y-2 overflow-y-auto p-3 sm:hidden">
                     {rows.length === 0 && <p className="py-5 text-center text-sm text-slate-500">ยังไม่มีเลขในแผ่นนี้ เริ่มคีย์เลขด้านบน</p>}
-                    {rows.map((row, i) => <article key={row.id} className={`rounded-lg border p-3 ${limitedSet.has(row.number) ? "border-amber-300 bg-amber-50" : "border-slate-200"}`}>
+                    {rows.map((row, i) => <article key={row.id} className={`rounded-lg border p-3 ${exceededNumbers.has(row.number) ? "border-red-400 bg-red-50" : limitedSet.has(row.number) ? "border-amber-300 bg-amber-50" : "border-slate-200"}`}>
                       <div className="flex items-start justify-between gap-2"><div><p className="text-xs text-slate-500">รายการ {i + 1} · {row.type === "run" ? "วิ่ง" : `${row.type} ตัว`}</p><p className="text-xl font-bold tracking-wider text-[#102356]">{row.number}{limitedSet.has(row.number) && <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 align-middle text-xs tracking-normal text-amber-900">เลขอั้น</span>}</p></div><p className="text-lg font-bold tabular-nums text-blue-700">{money(rowTotal(row))}</p></div>
-                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">{row.top > 0 && <span>บน {money(row.top)}</span>}{row.tod > 0 && <span>โต๊ด {money(row.tod)}</span>}{row.bottom > 0 && <span>ล่าง {money(row.bottom)}</span>}</div>
+                      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">{row.top > 0 && <span>บน {money(row.top)}</span>}{row.tod > 0 && <span>โต๊ด {money(row.tod)}</span>}{row.bottom > 0 && <span>ล่าง {money(row.bottom)}</span>}{exceededNumbers.has(row.number) && <span className="font-semibold text-red-700">เกินวงเงิน {money(excessByNumber(row.number))}</span>}</div>
                       <div className="mt-2 flex justify-end gap-2 border-t border-slate-200 pt-2"><Button type="button" variant="outline" size="sm" onClick={() => editRow(row)} aria-label={`แก้ไขเลข ${row.number}`}><Pencil className="size-4" /> แก้ไข</Button><Button type="button" variant="outline" size="sm" onClick={() => updateRows(rows.filter((item) => item.id !== row.id))} aria-label={`ลบเลข ${row.number}`}><Trash2 className="size-4" /> ลบ</Button></div>
                     </article>)}
                   </div>
@@ -475,7 +498,7 @@ export function EntryPage() {
                 <section className="rounded-xl bg-gradient-to-br from-[#152b50] to-[#0a1832] p-3.5 text-white shadow-sm"><div className="flex items-center justify-between text-sm"><h2 className="font-semibold">ยอดแผ่นนี้</h2><span>{formatNumber(rows.length)} รายการ</span></div><p className="mt-2 text-3xl font-bold tabular-nums">{money(totals.total)}</p></section>
                 <section className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm"><h2 className="font-bold text-[#102356]">5. ลูกค้านี้ · ทุกบิลในงวด</h2><p className="mt-1 text-xs text-slate-500">{customer?.name} · {formatNumber(customerBills.length)} บิลที่บันทึกแล้ว</p><dl className="mt-3 space-y-2 text-sm"><div className="flex justify-between"><dt>ยอดบิลสุทธิ</dt><dd className="font-semibold tabular-nums">{money(customerBilled)}</dd></div><div className="flex justify-between text-emerald-700"><dt>รับแล้ว</dt><dd className="font-semibold tabular-nums">{money(customerReceived)}</dd></div><div className="flex justify-between border-t pt-2 text-orange-700"><dt>คงเหลือ</dt><dd className="font-bold tabular-nums">{money(customerOwed)}</dd></div></dl>{customerBills.length > 0 && <div className="mt-3 max-h-56 space-y-2 overflow-y-auto border-t pt-3">{customerBills.map((bill) => <div key={bill.id} className="rounded-lg bg-slate-50 p-2 text-xs"><div className="flex justify-between font-semibold"><span>{bill.no}</span><span>{money(bill.amount)}</span></div><div className="mt-1 flex justify-between text-slate-500"><span>รับ {money(bill.amount - bill.outstanding)}</span><span>ค้าง {money(bill.outstanding)}</span></div>{bill.prize > 0 && <p className="mt-1 text-emerald-700">รางวัลต้องจ่าย {money(bill.prize)}</p>}</div>)}</div>}</section>
                 <section className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm"><h2 className="mb-2 font-bold text-[#102356]">สรุปยอด</h2><table className="w-full text-sm"><thead className="bg-slate-50 text-xs text-slate-600"><tr><th className="px-2 py-1.5 text-left">ประเภท</th><th className="px-2 py-1.5 text-right">แผ่นนี้</th><th className="px-2 py-1.5 text-right">ลูกค้านี้</th></tr></thead><tbody>{categories.map(([label, getAmount]) => { const here = rows.reduce((sum, row) => sum + getAmount(row), 0); const all = allRows.reduce((sum, row) => sum + getAmount(row), 0); return <tr key={label} className="border-b border-slate-100"><th className="px-2 py-1 text-left text-[13px] font-medium">{label}</th><td className={`px-2 py-1 text-right tabular-nums ${here ? "" : "text-slate-300"}`}>{formatNumber(here)}</td><td className={`px-2 py-1 text-right tabular-nums ${all ? "" : "text-slate-300"}`}>{formatNumber(all)}</td></tr>; })}</tbody><tfoot className="bg-blue-50 font-bold text-blue-700"><tr><td className="px-2 py-1.5">รวม</td><td className="px-2 py-1.5 text-right tabular-nums">{formatNumber(totals.total)}</td><td className="px-2 py-1.5 text-right tabular-nums">{formatNumber(allTotals.total)}</td></tr></tfoot></table></section>
-                <section className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm"><h2 className="flex items-center gap-2 font-bold text-[#102356]"><Keyboard className="size-4" /> คำสั่งลัด</h2><div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">{[["F1", "2 บน"], ["F2", "3 บน"], ["F3", "2 ล่าง"], ["F4", "3 ล่าง"], ["F5", "3 โต๊ด"], ["F6", "วิ่งบน"], ["F7", "วิ่งล่าง"]].map(([key, label]) => <div key={key} className="flex items-center gap-2"><kbd className="rounded border border-slate-200 bg-slate-50 px-2 py-1 font-mono">{key}</kbd><span className="text-slate-600">{label}</span></div>)}</div></section>
+                <section className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm"><h2 className="flex items-center gap-2 font-bold text-[#102356]"><Keyboard className="size-4" /> คำสั่งลัด</h2><div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">{[["F2", "หน้าคีย์โพย"], ["F4", "หน้ายอดซื้อ/ตีออก"], ["F8", "ล็อกยอดเงิน"], ["F9", "กลับเลข"]].map(([key, label]) => <div key={key} className="flex items-center gap-2"><kbd className="rounded border border-slate-200 bg-slate-50 px-2 py-1 font-mono">{key}</kbd><span className="text-slate-600">{label}</span></div>)}</div></section>
               </aside>
             </div>
             <p className="mt-3 text-right text-xs text-slate-400">ร่างแผ่นโพยเก็บในเบราว์เซอร์นี้ · บิลที่บันทึกแล้วอยู่ในหน้ารายการบิล</p>

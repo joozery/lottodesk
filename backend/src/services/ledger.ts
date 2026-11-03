@@ -1,4 +1,4 @@
-import { billPrize } from "../shared/prize-calc";
+import { linePrize } from "../shared/prize-calc";
 import type { Activity, Ledger, LotteryFilter, Payment } from "../shared/types";
 import { Activity as ActivityModel, Bill, Dealer, Payment as PaymentModel, Period, PrizeResultModel } from "../models";
 import { pubActivity, pubBill, pubPayment, pubPrize } from "../serialize";
@@ -56,9 +56,14 @@ export async function buildLedger(q: LedgerQuery): Promise<Ledger> {
 
   return {
     bills: bills.map((b) => {
-      const rates = resolveRates(rateConfig);
+      const period = periods.find((p) => p._id === b.periodId);
+      const rates = b.rates && Object.keys(b.rates).length > 0 ? b.rates : resolveRates(rateConfig, period?.rates ?? {});
+      const periodLimitedRates = period ? Object.fromEntries((period.limitedNumbers ?? []).map((number) => [number, period.limitedRate ?? period.limitedRates?.[number] ?? {}])) : {};
+      const rateOverrides = b.rateOverrides && Object.keys(b.rateOverrides).length > 0 ? b.rateOverrides : periodLimitedRates;
       const pub = pubBill(b);
-      return { ...pub, rates, prize: billPrize(pub.lines, pub.lottery, resultByPeriod.get(b.periodId), rates) };
+      const result = resultByPeriod.get(b.periodId);
+      const prize = result ? pub.lines.reduce((sum, line) => sum + linePrize(line, pub.lottery, result, { ...rates, ...(rateOverrides[line.number] ?? {}) }), 0) : 0;
+      return { ...pub, rates, rateOverrides, prize };
     }),
     payments: payments.filter((p) => inScope(p.lottery)).map(pubPayment) as Payment[],
     activities: activities.filter((a) => inScope(a.lottery)).map(pubActivity) as Activity[],

@@ -20,7 +20,7 @@ export const fetchOutstanding = () => api<Record<string, number>>("/payments/out
 export async function savePayment(payment: Omit<Payment, "id" | "at" | "recorded" | "periodId">): Promise<{ persisted: true; payment: Payment }> {
   const saved = await api<Payment>("/payments", {
     method: "POST",
-    body: { collectorId: payment.collectorId, lottery: payment.lottery, direction: payment.direction, amount: payment.amount, note: payment.note, customerId: payment.customerId ?? null },
+    body: { collectorId: payment.collectorId, lottery: payment.lottery, direction: payment.direction, amount: payment.amount, note: payment.note, customerId: payment.customerId ?? null, billId: payment.billId ?? null },
   });
   return { persisted: true, payment: saved };
 }

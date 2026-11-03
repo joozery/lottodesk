@@ -22,6 +22,7 @@ const MAX_ROWS = 300;
 const rowKey = (r: Pick<NumberExposure, "type" | "number">) => `${r.type}:${r.number}`;
 const TYPE_OPTIONS = Object.keys(BET_LABEL) as BetType[];
 type Notice = { ok: boolean; text: string } | null;
+type SortKey = "type" | "number" | "total" | "laidOff" | "retained" | "excess";
 
 export function LayoffPage() {
   const [nonce, setNonce] = useState(0);
@@ -31,6 +32,7 @@ export function LayoffPage() {
   const periods = useMemo(() => (periodsRemote.data ?? []).filter((p) => p.lottery === lottery).sort((a, b) => b.drawDate.localeCompare(a.drawDate)), [periodsRemote.data, lottery]);
   const periodId = periodChoice && periods.some((p) => p.id === periodChoice) ? periodChoice : periodsRemote.data ? defaultPeriodId(periodsRemote.data, lottery) : null;
   const period = periods.find((p) => p.id === periodId);
+  const limitedSet = new Set(period?.limitedNumbers ?? []);
   const exposureRemote = useRemote(`layoff-exposure-${periodId}-${nonce}`, periodId ? () => fetchExposure(periodId) : null, { keepPrevious: true });
   const targetsRemote = useRemote(`layoff-targets-${nonce}`, fetchTargets);
   const exposure = exposureRemote.data;
@@ -44,11 +46,28 @@ export function LayoffPage() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
   const [viewing, setViewing] = useState<LayoffSheet | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>("excess");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const rows = useMemo(() => {
     const q = search.trim();
     return (exposure?.rows ?? []).filter((r) => (typeFilter === "all" || r.type === typeFilter) && (!q || r.number.includes(q)) && (!onlyOver || r.over > 0 || r.excess > 0));
   }, [exposure, search, typeFilter, onlyOver]);
+  const sortedRows = useMemo(() => [...rows].sort((a, b) => {
+    const av = sortKey === "type" ? BET_LABEL[a.type] : sortKey === "number" ? a.number : a[sortKey];
+    const bv = sortKey === "type" ? BET_LABEL[b.type] : sortKey === "number" ? b.number : b[sortKey];
+    const result = typeof av === "string" && typeof bv === "string" ? av.localeCompare(bv) : Number(av) - Number(bv);
+    return (sortDir === "asc" ? result : -result) || b.total - a.total;
+  }), [rows, sortKey, sortDir]);
+
+  function sortBy(key: SortKey) {
+    if (sortKey === key) setSortDir((dir) => dir === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir(key === "excess" ? "desc" : "asc"); }
+  }
+
+  function sortLabel(label: string, key: SortKey) {
+    return <button type="button" className="inline-flex items-center gap-1 font-medium hover:text-blue-700" onClick={() => sortBy(key)}>{label}{sortKey === key && <span aria-hidden="true">{sortDir === "asc" ? "↑" : "↓"}</span>}</button>;
+  }
 
   const picked = (exposure?.rows ?? []).flatMap((r) => {
     const n = Number(amounts[rowKey(r)]);
@@ -137,24 +156,26 @@ export function LayoffPage() {
                   <table className="w-full min-w-[720px] text-sm">
                     <thead>
                       <tr className="bg-slate-50 text-slate-600">
-                        <th className="rounded-l-lg px-3 py-2 text-left font-medium">ประเภท</th>
-                        <th className="px-3 py-2 text-center font-medium">เลข</th>
-                        <th className="px-3 py-2 text-right font-medium">ยอดซื้อ</th>
+                        <th className="rounded-l-lg px-3 py-2 text-left">{sortLabel("ประเภท", "type")}</th>
+                        <th className="px-3 py-2 text-center">{sortLabel("เลข", "number")}</th>
+                        <th className="px-3 py-2 text-right">{sortLabel("ยอดซื้อ", "total")}</th>
                         <th className="px-3 py-2 text-right font-medium">วงเงิน</th>
-                        <th className="px-3 py-2 text-right font-medium">ตีออกแล้ว</th>
-                        <th className="px-3 py-2 text-right font-medium">เรารับเอง</th>
-                        <th className="px-3 py-2 text-right font-medium">ยังเกิน</th>
+                        <th className="px-3 py-2 text-right">{sortLabel("ตีออกแล้ว", "laidOff")}</th>
+                        <th className="px-3 py-2 text-right">{sortLabel("เรารับเอง", "retained")}</th>
+                        <th className="px-3 py-2 text-right">{sortLabel("ยังเกิน", "excess")}</th>
                         <th className="rounded-r-lg px-3 py-2 text-right font-medium">ตีออกครั้งนี้</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {rows.slice(0, MAX_ROWS).map((r) => {
+                      {sortedRows.slice(0, MAX_ROWS).map((r) => {
                         const v = amounts[rowKey(r)] ?? "";
                         const bad = v.trim() !== "" && !(Number(v) > 0 && Number(v) <= r.retained);
+                        const limited = limitedSet.has(r.number);
+                        const over = r.excess > 0;
                         return (
-                          <tr key={rowKey(r)} className={`border-b border-slate-100 ${r.excess > 0 ? "bg-orange-50/60" : ""}`}>
+                          <tr key={rowKey(r)} className={`border-b border-slate-100 ${limited ? "bg-violet-50" : over ? "bg-orange-50/60" : ""}`}>
                             <td className="px-3 py-1.5 text-slate-600">{BET_LABEL[r.type]}</td>
-                            <td className="px-3 py-1.5 text-center text-base font-bold tabular-nums">{r.number}</td>
+                            <td className="px-3 py-1.5 text-center text-base font-bold tabular-nums text-slate-900">{r.number}{limited && over && <span className="ml-1.5 rounded bg-violet-200 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-violet-800">เกินวงเงิน</span>}</td>
                             <td className="px-3 py-1.5 text-right tabular-nums">{formatNumber(r.total)}</td>
                             <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{r.limit === null ? "-" : formatNumber(r.limit)}</td>
                             <td className="px-3 py-1.5 text-right tabular-nums text-slate-500">{r.laidOff ? formatNumber(r.laidOff) : "-"}</td>

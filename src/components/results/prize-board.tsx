@@ -40,7 +40,14 @@ export function PrizeBoard({ period, result }: Props) {
   const spec = PRIZE_SPEC[period.lottery];
   const primary = spec.find((s) => s.primary)!;
   const others = spec.filter((s) => !s.primary);
-  const group = (key: string) => result?.groups.find((g) => g.key === key);
+  const payout = result ? payoutNumbers(period.lottery, result) : null;
+  const group = (key: string) => {
+    const saved = result?.groups.find((g) => g.key === key);
+    if (saved) return saved;
+    if (key === "runTop" && payout?.runTop) return { key, label: "วิ่งบน", numbers: [payout.runTop] };
+    if (key === "runBottom" && payout?.runBottom) return { key, label: "วิ่งล่าง", numbers: [payout.runBottom] };
+    return undefined;
+  };
 
   return (
     <section aria-label="ผลรางวัล" className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -73,6 +80,7 @@ export function PrizeBoard({ period, result }: Props) {
           src="/cover/package-lock.png"
           alt=""
           fill
+          loading="eager"
           sizes="(min-width: 1280px) 900px, 100vw"
           className="object-cover object-center"
           aria-hidden
@@ -116,6 +124,8 @@ function PayoutStrip({ lottery, result }: { lottery: Lottery; result: PrizeResul
     { label: "3 ตัวบน", value: p.top3 },
     { label: "2 ตัวบน", value: p.top2 },
     { label: "2 ตัวล่าง", value: p.bottom2 },
+    { label: "วิ่งบน", value: p.runTop },
+    { label: "วิ่งล่าง", value: p.runBottom },
     ...(p.bottom3.length ? [{ label: "3 ตัวล่าง", value: p.bottom3.join(" · ") }] : []),
   ];
   return (

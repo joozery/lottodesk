@@ -8,7 +8,7 @@ export const fetchDealers = () => api<Dealer[]>("/dealers");
 export const fetchPeriods = () => api<Period[]>("/periods");
 export const createPeriod = (lottery: Lottery, drawDate: string) =>
   api<Period>("/periods", { method: "POST", body: { lottery, drawDate } });
-export const updateLimitedNumbers = (periodId: string, numbers: string[]) => api<Period>(`/periods/${periodId}/limited-numbers`, { method: "PATCH", body: { numbers } });
+export const updateLimitedNumbers = (periodId: string, numbers: string[], limits: Record<string, number> = {}, rates: Record<string, number> = {}, limitedRates: Record<string, Record<string, number>> = {}, limitedRate: Record<string, number> = {}, closedNumbers: string[] = []) => api<Period>(`/periods/${periodId}/limited-numbers`, { method: "PATCH", body: { numbers, closedNumbers, limits, rates, limitedRates, limitedRate } });
 
 export const fetchLedger = (filter: LedgerFilter) =>
   api<Ledger>("/ledger", { query: { lottery: filter.lottery, periodId: filter.periodId ?? undefined, from: filter.from || undefined, to: filter.to || undefined } });
@@ -26,9 +26,11 @@ export interface NewBill {
   lines: BetLine[];
   paid?: boolean;
   discountPercent?: number;
+  specialDiscountPercent?: number;
   paidAmount?: number;
 }
 export const createBill = (bill: NewBill) => api<Omit<Bill, "prize" | "rates"> & { warnings?: BillWarning[] }>("/bills", { method: "POST", body: bill });
+export const updateBillDiscount = (billId: string, numberDiscountPercent: number, runDiscountPercent: number) => api<Bill>(`/bills/${billId}/discount`, { method: "PATCH", body: { numberDiscountPercent, runDiscountPercent } });
 
 export const createDealer = (name: string) => api<Dealer>("/dealers", { method: "POST", body: { name } });
 

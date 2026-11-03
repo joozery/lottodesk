@@ -20,7 +20,7 @@ const layoffBody = z.object({
 });
 
 const discountBody = z.object({
-  defaults: z.object(Object.fromEntries(BET_TYPES.map((t) => [t, z.number().min(0).max(100)]))).strict(),
+  defaults: z.object({ number: z.number().min(0).max(100), run: z.number().min(0).max(100) }).strict(),
   tiers: z.array(z.object({ threshold: z.number().positive(), percent: z.number().min(0).max(100) })).max(20),
 }).strict();
 

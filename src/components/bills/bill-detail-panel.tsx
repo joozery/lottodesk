@@ -26,6 +26,7 @@ export function BillDetailPanel({ view, onClose }: { view: BillView; onClose?: (
   const { bill, period } = view;
   const prize = useRemote(`bill-prize-${bill.periodId}`, () => fetchPrizeResult(bill.periodId));
   const rates = bill.rates ?? RATES;
+  const rateForLine = (number: string, type: keyof typeof rates) => ({ ...rates, ...(bill.rateOverrides?.[number] ?? {}) })[type];
   const confirmed = resultOf(view) !== "pending";
   const status = paymentStatusOf(bill);
   const paid = bill.amount - bill.outstanding;
@@ -55,9 +56,8 @@ export function BillDetailPanel({ view, onClose }: { view: BillView; onClose?: (
       </div>
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 rounded-lg bg-slate-50 px-3.5 py-3 text-sm">
-        <dt className="text-slate-500">เจ้ามือ</dt><dd className="font-medium text-slate-900">{view.dealer}</dd>
         <dt className="text-slate-500">ผู้ส่งโพย</dt><dd className="font-medium text-slate-900">{view.collector}</dd>
-        <dt className="text-slate-500">เจ้าของโพย</dt><dd className="font-medium text-slate-900">{view.customer}{view.code ? ` (${view.code})` : ""}</dd>
+        <dt className="text-slate-500">เจ้าของโพย</dt><dd className="font-medium text-slate-900">{view.customer}{view.code ? ` (${view.code})` : ""}{bill.outstanding <= 0 && <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold text-emerald-700">ชำระแล้ว</span>}</dd>
       </dl>
 
       <section aria-label="รายการเลข" className="overflow-hidden rounded-lg border border-slate-200">
@@ -67,12 +67,13 @@ export function BillDetailPanel({ view, onClose }: { view: BillView; onClose?: (
         {confirmed && prize.loading && <Skeleton className="m-3 h-16" />}
         <ul className="max-h-72 divide-y divide-slate-100 overflow-y-auto">
           {bill.lines.map((line, i) => {
-            const win = confirmed && prize.data ? linePrize(line, bill.lottery, prize.data, rates) : 0;
+            const lineRates = { ...rates, ...(bill.rateOverrides?.[line.number] ?? {}) };
+            const win = confirmed && prize.data ? linePrize(line, bill.lottery, prize.data, lineRates) : 0;
             return (
               <li key={i} className={cn("grid grid-cols-[1.3fr_1fr_1fr] items-center px-3.5 py-2 text-sm", win > 0 && "bg-emerald-50/70")}>
                 <span className="text-slate-800">
                   {BET_LABEL[line.type]}
-                  <span className="block text-[11px] text-slate-400">× {rates[line.type]}</span>
+                  <span className="block text-[11px] text-slate-400">× {rateForLine(line.number, line.type)}</span>
                 </span>
                 <span className="text-center font-mono text-base font-bold tracking-wider text-slate-900">{line.number}</span>
                 <span className="text-right tabular-nums text-slate-900">
@@ -87,7 +88,7 @@ export function BillDetailPanel({ view, onClose }: { view: BillView; onClose?: (
           <span>รวม ({formatNumber(bill.lines.length)} รายการ)</span>
           <span className="tabular-nums">{baht(bill.grossAmount ?? bill.amount)}</span>
         </div>
-        {(bill.discountAmount ?? 0) > 0 && <div className="flex justify-between border-t border-slate-100 px-3.5 py-2 text-sm"><span>ส่วนลด {bill.discountPercent}%</span><span className="tabular-nums">− {baht(bill.discountAmount ?? 0)}</span></div>}
+        {(bill.discountAmount ?? 0) > 0 && <div className="flex justify-between border-t border-slate-100 px-3.5 py-2 text-sm"><span>ส่วนลด {bill.discountPercent}%{bill.specialDiscountPercent !== undefined ? " (พิเศษ)" : ""}</span><span className="tabular-nums">− {baht(bill.discountAmount ?? 0)}</span></div>}
         {confirmed && (
           <div className="flex justify-between border-t border-slate-100 px-3.5 py-2 text-sm">
             <span className="text-slate-500">เงินรางวัล</span>
@@ -111,7 +112,7 @@ export function BillDetailPanel({ view, onClose }: { view: BillView; onClose?: (
       <BillShareActions view={view} />
 
       <div className="flex justify-between text-sm">
-        {bill.outstanding > 0 ? <Link href="/payments" className="font-medium text-blue-700 hover:underline">ไปรับเงิน</Link> : <span />}
+        {bill.outstanding > 0 ? <Link href={`/payments?receive=1&billId=${encodeURIComponent(bill.id)}&collectorId=${encodeURIComponent(bill.collectorId)}&customerId=${encodeURIComponent(bill.customerId ?? "")}&amount=${encodeURIComponent(String(bill.outstanding))}&lottery=${bill.lottery}`} className="font-medium text-blue-700 hover:underline">ไปรับเงิน</Link> : <span />}
         <Link href="/entry" className="font-medium text-blue-700 hover:underline">คีย์โพยเพิ่ม</Link>
       </div>
     </div>
