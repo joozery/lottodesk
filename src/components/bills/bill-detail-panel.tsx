@@ -31,6 +31,12 @@ export function BillDetailPanel({ view, onClose }: { view: BillView; onClose?: (
   const status = paymentStatusOf(bill);
   const paid = bill.amount - bill.outstanding;
   const paidPct = bill.amount > 0 ? Math.round((paid / bill.amount) * 100) : 0;
+  const numberGross = bill.lines.filter((line) => line.type !== "runTop" && line.type !== "runBottom").reduce((sum, line) => sum + line.amount, 0);
+  const runGross = bill.lines.filter((line) => line.type === "runTop" || line.type === "runBottom").reduce((sum, line) => sum + line.amount, 0);
+  const numberPercent = bill.specialNumberDiscountPercent ?? bill.discountPercent ?? 0;
+  const runPercent = 8;
+  const numberDiscountAmount = Math.round(numberGross * numberPercent) / 100;
+  const runDiscountAmount = Math.round(runGross * runPercent) / 100;
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -88,7 +94,8 @@ export function BillDetailPanel({ view, onClose }: { view: BillView; onClose?: (
           <span>รวม ({formatNumber(bill.lines.length)} รายการ)</span>
           <span className="tabular-nums">{baht(bill.grossAmount ?? bill.amount)}</span>
         </div>
-        {(bill.discountAmount ?? 0) > 0 && <div className="flex justify-between border-t border-slate-100 px-3.5 py-2 text-sm"><span>ส่วนลด {bill.discountPercent}%{bill.specialDiscountPercent !== undefined ? " (พิเศษ)" : ""}</span><span className="tabular-nums">− {baht(bill.discountAmount ?? 0)}</span></div>}
+        {numberDiscountAmount > 0 && <div className="flex justify-between border-t border-slate-100 px-3.5 py-2 text-sm"><span>ส่วนลดเลข {formatNumber(numberPercent)}%</span><span className="tabular-nums">− {baht(numberDiscountAmount)}</span></div>}
+        {runDiscountAmount > 0 && <div className="flex justify-between border-t border-slate-100 px-3.5 py-2 text-sm"><span>ส่วนลดวิ่ง {formatNumber(runPercent)}%</span><span className="tabular-nums">− {baht(runDiscountAmount)}</span></div>}
         {confirmed && (
           <div className="flex justify-between border-t border-slate-100 px-3.5 py-2 text-sm">
             <span className="text-slate-500">เงินรางวัล</span>

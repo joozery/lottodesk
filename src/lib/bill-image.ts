@@ -20,6 +20,21 @@ const C = {
 };
 const baht = (n: number) => `฿${formatNumber(n)}`;
 
+function discountBreakdown(view: BillView) {
+  const { bill } = view;
+  const numberGross = bill.lines.filter((line) => line.type !== "runTop" && line.type !== "runBottom").reduce((sum, line) => sum + line.amount, 0);
+  const runGross = bill.lines.filter((line) => line.type === "runTop" || line.type === "runBottom").reduce((sum, line) => sum + line.amount, 0);
+  const numberPercent = bill.specialNumberDiscountPercent ?? bill.discountPercent ?? 0;
+  // Legacy bills without a separate run discount use the current 8% rule until migration runs.
+  const runPercent = 8;
+  return {
+    numberPercent,
+    runPercent,
+    numberAmount: Math.round(numberGross * numberPercent) / 100,
+    runAmount: Math.round(runGross * runPercent) / 100,
+  };
+}
+
 function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
@@ -56,7 +71,7 @@ export async function renderBillImage(view: BillView): Promise<Blob> {
   const tableRows = Array.from(grouped.entries()).slice(0, MAX_ROWS);
   const hidden = Array.from(grouped.entries()).slice(MAX_ROWS);
   const rows = tableRows.length + (hidden.length ? 1 : 0) + 1;
-  const H = 1080 + Math.max(0, rows - BASE_ROWS) * ROW_H;
+  const H = 1140 + Math.max(0, rows - BASE_ROWS) * ROW_H;
 
   // ใช้ฟอนต์เดียวกับหน้าเว็บ (Noto Sans Thai) และรอให้โหลดเสร็จก่อนวาด
   const family = getComputedStyle(document.body).fontFamily;
@@ -152,12 +167,17 @@ export async function renderBillImage(view: BillView): Promise<Blob> {
   font(600, 28);
   text(`รวม (${formatNumber(bill.lines.length)} รายการ)`, PAD + 24, y + 34, "left", C.muted);
   text(baht(bill.grossAmount ?? bill.amount), W - PAD - 24, y + 34, "right", C.ink);
-  y += 52 + 8;
+  y += 52;
+  const breakdown = discountBreakdown(view);
+  font(500, 22);
+  text(`ส่วนลดเลข ${formatNumber(breakdown.numberPercent)}% (${baht(breakdown.numberAmount)})`, PAD + 24, y + 28, "left", C.muted);
+  text(`ส่วนลดวิ่ง ${formatNumber(breakdown.runPercent)}% (${baht(breakdown.runAmount)})`, W - PAD - 24, y + 28, "right", C.muted);
+  y += 44 + 8;
   roundRect(ctx, PAD, y, W - PAD * 2, 88, 18, C.navy);
   font(600, 32);
   text("ยอดสุทธิ", PAD + 32, y + 56, "left", C.white);
   font(700, 46);
-  text(baht(bill.grossAmount ?? bill.amount), W - PAD - 32, y + 58, "right", C.white);
+  text(baht(bill.amount), W - PAD - 32, y + 58, "right", C.white);
   y += 88 + 20;
 
   // ท้ายภาพ
@@ -178,7 +198,7 @@ export function billSummaryText(view: BillView) {
     `บิล ${bill.no} · ${lotteryLabel[bill.lottery]} งวด ${period ? formatDate(period.drawDate) : "-"}`,
     `เจ้าของโพย ${view.customer} (ผู้ส่งโพย ${view.collector})`,
     ...shown,
-    `ยอดเลข ${baht(bill.grossAmount ?? bill.amount)} · ส่วนลด ${bill.discountPercent ?? 0}% · ยอดสุทธิ ${baht(bill.amount)} · ${PAYMENT_LABEL[paymentStatusOf(bill)]} (รับแล้ว ${baht(bill.amount - bill.outstanding)} · ค้าง ${baht(bill.outstanding)})`,
+    `ยอดเลข ${baht(bill.grossAmount ?? bill.amount)} · ส่วนลดเลข ${formatNumber(discountBreakdown(view).numberPercent)}% · ส่วนลดวิ่ง ${formatNumber(discountBreakdown(view).runPercent)}% · ยอดสุทธิ ${baht(bill.amount)} · ${PAYMENT_LABEL[paymentStatusOf(bill)]} (รับแล้ว ${baht(bill.amount - bill.outstanding)} · ค้าง ${baht(bill.outstanding)})`,
   ].join("\n");
 }
 

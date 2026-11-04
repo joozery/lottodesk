@@ -17,9 +17,7 @@ export function GroupedBillDiscountEditor({ rows, discountConfig, onSaved }: { r
     ? rows[0].bill.specialNumberDiscountPercent
     : calculatedNumber;
   const options = [...new Set([discountConfig.defaults.number, ...discountConfig.tiers.map((tier) => tier.percent), currentNumber])].filter((percent): percent is number => typeof percent === "number").sort((a, b) => a - b);
-  const currentRun: number = rows.length > 0 && rows.every((row) => row.bill.specialRunDiscountPercent !== undefined && row.bill.specialRunDiscountPercent === rows[0].bill.specialRunDiscountPercent)
-    ? rows[0].bill.specialRunDiscountPercent ?? 0
-    : rows.reduce((sum, row) => sum + (row.bill.specialRunDiscountPercent ?? row.bill.discountPercent ?? 0), 0) / Math.max(rows.length, 1);
+  const currentRun = discountConfig.defaults.run;
   const [value, setValue] = useState(currentNumber === undefined ? "" : String(currentNumber));
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");

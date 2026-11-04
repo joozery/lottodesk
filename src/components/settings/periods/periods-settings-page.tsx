@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Calendar, Plus } from "@/components/icons";
+import { AlertCircle, Calendar, Plus, Trash2 } from "@/components/icons";
 import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import type { Lottery, Period } from "@/lib/types";
 import { createPeriod, fetchPeriods, updateLimitedNumbers } from "@/services/dealers-service";
 import { fetchRates } from "@/services/rates-service";
 import { SettingsTabs } from "../settings-tabs";
+import { resetBusinessData } from "@/services/users-service";
 
 function today() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
@@ -49,6 +50,9 @@ export function PeriodsSettingsPage() {
   const [limitSaving, setLimitSaving] = useState(false);
   const [rateEntries, setRateEntries] = useState<Record<string, string>>({});
   const [limitedRateEntry, setLimitedRateEntry] = useState<Record<string, string>>({});
+  const [resetting, setResetting] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetConfirmation, setResetConfirmation] = useState("");
   useEffect(() => setMinimumDate(today()), []);
   const sortedPeriods = useMemo(() => [...(periods ?? [])].sort((a, b) => b.drawDate.localeCompare(a.drawDate)), [periods]);
   const fallbackRates = { ...RATES, ...(rateConfig?.rates ?? {}) };
@@ -113,6 +117,20 @@ export function PeriodsSettingsPage() {
     } finally { setSaving(false); }
   }
 
+  async function resetBusiness() {
+    if (resetConfirmation !== "ล้างข้อมูลทั้งหมด") return;
+    setResetting(true);
+    try {
+      await resetBusinessData();
+      setNotice({ ok: true, text: "รีเซ็ตข้อมูลธุรกิจทั้งหมดแล้ว ผู้ใช้ อัตราจ่าย และการตั้งค่ายังคงอยู่" });
+      setResetOpen(false);
+      setResetConfirmation("");
+      setNonce((n) => n + 1);
+    } catch (e) {
+      setNotice({ ok: false, text: e instanceof Error ? e.message : "รีเซ็ตข้อมูลไม่สำเร็จ" });
+    } finally { setResetting(false); }
+  }
+
   return (
     <>
       <TopBar breadcrumb={["ตั้งค่า", "งวดหวย"]} />
@@ -160,6 +178,10 @@ export function PeriodsSettingsPage() {
             ))}
           </div>
         </section>
+        <section className="mt-5 rounded-xl border border-red-200 bg-red-50/50 p-4 sm:p-5">
+          <div className="flex items-start gap-3"><AlertCircle className="mt-0.5 size-5 shrink-0 text-red-600" /><div><h2 className="font-semibold text-red-900">รีเซ็ตข้อมูลธุรกิจ</h2><p className="mt-1 text-sm text-red-800">ลบข้อมูลธุรกิจทั้งหมด โดยไม่ลบผู้ใช้ อัตราจ่าย หรือการตั้งค่า</p><Button type="button" variant="outline" className="mt-3 border-red-300 text-red-700 hover:bg-red-100" onClick={() => { setResetConfirmation(""); setResetOpen(true); }} disabled={resetting}><Trash2 className="size-4" />รีเซ็ตข้อมูลธุรกิจทั้งหมด</Button></div></div>
+        </section>
+        {resetOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="reset-business-title"><div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl"><div className="flex items-start gap-3"><AlertCircle className="mt-0.5 size-6 shrink-0 text-red-600" /><div><h2 id="reset-business-title" className="text-lg font-bold text-red-900">ยืนยันการรีเซ็ตข้อมูล</h2><p className="mt-1 text-sm text-slate-600">การทำรายการนี้ลบถาวรและกู้คืนไม่ได้ ข้อมูลที่จะถูกลบคือ:</p><ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700"><li>เจ้าดีลเลอร์ ผู้รวบรวม และลูกค้าย่อย</li><li>งวดหวยและบิลทั้งหมด</li><li>รายการรับ–จ่ายเงิน</li><li>ผลรางวัลและแผ่นตีออก</li><li>ประวัติกิจกรรม</li><li>ตัวนับเลขบิลและรหัสลูกค้า</li></ul><p className="mt-4 text-sm font-medium text-slate-700">จะไม่ลบผู้ใช้ อัตราจ่าย หรือการตั้งค่า</p><label className="mt-4 block text-sm font-medium text-slate-700">พิมพ์ <span className="font-bold text-red-700">ล้างข้อมูลทั้งหมด</span> เพื่อยืนยัน<Input className="mt-1" value={resetConfirmation} onChange={(event) => setResetConfirmation(event.target.value)} placeholder="ล้างข้อมูลทั้งหมด" autoFocus /></label><div className="mt-5 flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => { setResetOpen(false); setResetConfirmation(""); }} disabled={resetting}>ยกเลิก</Button><Button type="button" className="bg-red-600 hover:bg-red-700" onClick={() => void resetBusiness()} disabled={resetting || resetConfirmation !== "ล้างข้อมูลทั้งหมด"}>{resetting ? "กำลังลบข้อมูล..." : "ยืนยันลบข้อมูลทั้งหมด"}</Button></div></div></div></div></div>}
       </main>
     </>
   );

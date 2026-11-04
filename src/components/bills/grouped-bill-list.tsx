@@ -8,6 +8,13 @@ import { BET_LABEL, linePrize, RATES } from "@/lib/prize-calc";
 import { useRemote } from "@/hooks/use-remote";
 import { fetchPrizeResult } from "@/services/results-service";
 
+function discountPercentForLine(row: BillView, type: BillView["bill"]["lines"][number]["type"], runDiscountPercent: number) {
+  const isRun = type === "runTop" || type === "runBottom";
+  return isRun
+    ? runDiscountPercent
+    : row.bill.specialNumberDiscountPercent ?? row.bill.discountPercent ?? 0;
+}
+
 export function GroupedBillList({ rows, filtered, onSelectGroup }: { rows: BillView[] | null; filtered: boolean; onSelectGroup?: (rows: BillView[]) => void }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   if (!rows) return <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">กำลังโหลด...</div>;
@@ -28,7 +35,7 @@ export function GroupedBillList({ rows, filtered, onSelectGroup }: { rows: BillV
   return <section className="rounded-xl border border-slate-200 bg-white p-3.5"><div className="mb-2 text-xs text-slate-500">กดแถวเพื่อดูสรุปด้านขวาและกางบิลทั้งหมดในกลุ่ม</div><div className="overflow-x-auto"><table className="w-full min-w-[820px] text-sm"><thead><tr className="bg-slate-50 text-left text-slate-600"><th className="rounded-l-lg px-3 py-2.5 font-medium">ลูกค้าหลัก / งวด</th><th className="px-3 py-2.5 font-medium">ประเภทหวย</th><th className="px-3 py-2.5 text-right font-medium">จำนวนบิล</th><th className="px-3 py-2.5 text-right font-medium">ยอดก่อนลด</th><th className="px-3 py-2.5 text-right font-medium">ยอดสุทธิ</th><th className="px-3 py-2.5 text-right font-medium">ยอดจ่าย</th><th className="rounded-r-lg px-3 py-2.5 text-right font-medium">ค้างชำระ</th></tr></thead><tbody>{[...groups.entries()].map(([key, group]) => <Fragment key={key}><tr className="cursor-pointer border-b border-slate-100 hover:bg-blue-50" onClick={() => { onSelectGroup?.(group.bills); setExpanded((current) => current === key ? null : key); }}><td className="px-3 py-3"><p className="font-medium text-slate-900">{expanded === key ? "▼ " : "▶ "}{group.collector}</p><p className="text-xs text-slate-500">งวด {formatDate(group.period)} · {group.customers.size} ลูกค้าย่อย</p></td><td className="px-3 py-3">{lotteryLabel[group.lottery]}</td><td className="px-3 py-3 text-right tabular-nums">{formatNumber(group.count)}</td><td className="px-3 py-3 text-right tabular-nums">{formatNumber(group.gross)} บาท</td><td className="px-3 py-3 text-right font-medium tabular-nums">{formatNumber(group.amount)} บาท</td><td className="px-3 py-3 text-right font-medium tabular-nums text-emerald-700">{group.prize ? `${formatNumber(group.prize)} บาท` : "-"}</td><td className="px-3 py-3 text-right tabular-nums">{group.outstanding ? `${formatNumber(group.outstanding)} บาท` : "-"}</td></tr>{expanded === key && group.bills.map((row) => <tr key={row.bill.id} className="border-b border-slate-100 bg-slate-50 text-xs"><td className="py-2 pl-8 pr-3">{row.bill.no} · {row.customer}</td><td className="px-3 py-2">{lotteryLabel[row.bill.lottery]}</td><td className="px-3 py-2 text-right">1 บิล</td><td className="px-3 py-2 text-right">{formatNumber(row.bill.grossAmount ?? row.bill.amount)} บาท</td><td className="px-3 py-2 text-right">{formatNumber(row.bill.amount)} บาท</td><td className="px-3 py-2 text-right text-emerald-700">{row.bill.prize ? `${formatNumber(row.bill.prize)} บาท` : "-"}</td><td className="px-3 py-2 text-right">{row.bill.outstanding ? `${formatNumber(row.bill.outstanding)} บาท` : "-"}</td></tr>)}</Fragment>)}</tbody></table></div></section>;
 }
 
-export function GroupedBillDetail({ rows }: { rows: BillView[] }) {
+export function GroupedBillDetail({ rows, runDiscountPercent = 0 }: { rows: BillView[]; runDiscountPercent?: number }) {
   const first = rows[0];
   const prizeResult = useRemote(`group-prize-${first?.bill.periodId ?? "none"}`, first ? () => fetchPrizeResult(first.bill.periodId) : null);
   if (!first) return null;
@@ -36,7 +43,18 @@ export function GroupedBillDetail({ rows }: { rows: BillView[] }) {
   const amount = rows.reduce((sum, row) => sum + row.bill.amount, 0);
   const outstanding = rows.reduce((sum, row) => sum + row.bill.outstanding, 0);
   const discountAmount = Math.max(0, Math.round((gross - amount) * 100) / 100);
-  const discountPercent = gross > 0 ? Math.round((discountAmount / gross) * 10000) / 100 : 0;
+  const discountTotals = rows.reduce((totals, row) => {
+    row.bill.lines.forEach((line) => {
+      const isRun = line.type === "runTop" || line.type === "runBottom";
+      const percent = discountPercentForLine(row, line.type, runDiscountPercent);
+      const key = isRun ? "run" : "number";
+      totals[key].gross += line.amount;
+      totals[key].discount += line.amount * percent / 100;
+    });
+    return totals;
+  }, { number: { gross: 0, discount: 0 }, run: { gross: 0, discount: 0 } });
+  const numberDiscountPercent = discountTotals.number.gross > 0 ? Math.round((discountTotals.number.discount / discountTotals.number.gross) * 10000) / 100 : 0;
+  const runDiscountPercentShown = discountTotals.run.gross > 0 ? Math.round((discountTotals.run.discount / discountTotals.run.gross) * 10000) / 100 : runDiscountPercent;
   const winners = prizeResult.data ? [...rows.reduce((map, row) => {
     row.bill.lines.forEach((line) => {
       const rates = { ...RATES, ...(row.bill.rates ?? {}), ...(row.bill.rateOverrides?.[line.number] ?? {}) };
@@ -109,7 +127,7 @@ export function GroupedBillDetail({ rows }: { rows: BillView[] }) {
     rows.forEach((row) => row.bill.lines.forEach((line) => {
       const current = totals.get(line.type) ?? { gross: 0, net: 0 };
       current.gross += line.amount;
-      current.net += line.amount * (100 - (row.bill.specialNumberDiscountPercent ?? row.bill.specialRunDiscountPercent ?? row.bill.discountPercent ?? 0)) / 100;
+      current.net += line.amount * (100 - discountPercentForLine(row, line.type, runDiscountPercent)) / 100;
       totals.set(line.type, current);
     }));
     ctx.font = "700 22px Arial";
@@ -126,10 +144,11 @@ export function GroupedBillDetail({ rows }: { rows: BillView[] }) {
     });
     ctx.fillStyle = "#172033";
     ctx.font = "700 22px Arial";
-    ctx.fillText(`รวมยอดเต็ม ${formatNumber(gross)} บาท`, 70, 780);
-    ctx.fillText(`ส่วนลด ${formatNumber(discountPercent)}% (${formatNumber(discountAmount)} บาท) · เก็บเต็ม ${formatNumber(amount)} บาท`, 70, 805);
+    ctx.fillText(`รวมยอดเต็ม ${formatNumber(gross)} บาท`, 70, 760);
+    ctx.fillText(`ส่วนลดเลข ${formatNumber(numberDiscountPercent)}% (${formatNumber(discountTotals.number.discount)} บาท)`, 70, 785);
+    ctx.fillText(`ส่วนลดวิ่ง ${formatNumber(runDiscountPercentShown)}% (${formatNumber(discountTotals.run.discount)} บาท) · ยอดสุทธิ ${formatNumber(amount)} บาท`, 70, 810);
     ctx.fillStyle = "#172033";
-    ctx.fillText(`ยอดจ่ายรางวัล ${formatNumber(prize)} บาท`, 70, 830);
+    ctx.fillText(`ยอดจ่ายรางวัล ${formatNumber(prize)} บาท`, 70, 835);
     if (winners.length > 0) {
       ctx.fillStyle = "#172033";
       ctx.font = "700 22px Arial";
@@ -160,6 +179,6 @@ export function GroupedBillDetail({ rows }: { rows: BillView[] }) {
       setTimeout(() => URL.revokeObjectURL(url), 10_000);
     }, "image/png");
   }
-  return <div className="p-4"><div className="flex items-start justify-between gap-2"><div><h2 className="font-semibold text-slate-900">สรุปรวมกลุ่ม</h2><p className="mt-1 text-sm text-slate-500">{first.collector} · งวด {formatDate(first.period?.drawDate ?? "-")}</p></div><div className="flex gap-2"><Button variant="outline" size="sm" onClick={downloadGroup}><Download className="size-4" /> โหลดรูป</Button><Button variant="outline" size="sm" onClick={printGroup}><Printer className="size-4" /> พิมพ์สรุปรวม</Button></div></div><dl className="mt-4 space-y-2 text-sm"><div className="flex justify-between"><dt>จำนวนบิล</dt><dd>{formatNumber(rows.length)}</dd></div><div className="flex justify-between"><dt>ยอดก่อนลด</dt><dd>{formatNumber(gross)} บาท</dd></div><div className="flex justify-between font-semibold text-emerald-700"><dt>ส่วนลดรวม</dt><dd>{formatNumber(discountPercent)}% · {formatNumber(discountAmount)} บาท</dd></div><div className="flex justify-between font-semibold text-blue-700"><dt>ยอดสุทธิ</dt><dd>{formatNumber(amount)} บาท</dd></div><div className="flex justify-between text-orange-700"><dt>ค้างชำระ</dt><dd>{outstanding ? `${formatNumber(outstanding)} บาท` : "-"}</dd></div></dl><div className="mt-4 border-t border-slate-100 pt-3"><p className="text-xs font-semibold text-slate-500">บิลในกลุ่ม</p>{rows.map((row) => <div key={row.bill.id} className="mt-2 flex justify-between text-xs"><span>{row.bill.no} · {row.customer}</span><span>{formatNumber(row.bill.amount)} บาท</span></div>)}</div><div className="mt-4 border-t border-slate-100 pt-3"><p className="text-xs font-semibold text-slate-500">รายการเลขที่ซื้อ</p><div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">{rows.flatMap((row) => row.bill.lines.map((line, index) => <div key={row.bill.id + "-line-" + index} className="flex items-center justify-between gap-2 rounded bg-slate-50 px-2 py-1.5 text-xs"><span><strong>{BET_LABEL[line.type]}</strong> · {line.number}</span><span className="tabular-nums">{formatNumber(line.amount)} บาท</span></div>))}</div></div></div>;
+  return <div className="p-4"><div className="flex items-start justify-between gap-2"><div><h2 className="font-semibold text-slate-900">สรุปรวมกลุ่ม</h2><p className="mt-1 text-sm text-slate-500">{first.collector} · งวด {formatDate(first.period?.drawDate ?? "-")}</p></div><div className="flex gap-2"><Button variant="outline" size="sm" onClick={downloadGroup}><Download className="size-4" /> โหลดรูป</Button><Button variant="outline" size="sm" onClick={printGroup}><Printer className="size-4" /> พิมพ์สรุปรวม</Button></div></div><dl className="mt-4 space-y-2 text-sm"><div className="flex justify-between"><dt>จำนวนบิล</dt><dd>{formatNumber(rows.length)}</dd></div><div className="flex justify-between"><dt>ยอดก่อนลด</dt><dd>{formatNumber(gross)} บาท</dd></div><div className="flex justify-between font-semibold text-emerald-700"><dt>ส่วนลดเลข</dt><dd>{formatNumber(numberDiscountPercent)}% · {formatNumber(discountTotals.number.discount)} บาท</dd></div><div className="flex justify-between font-semibold text-emerald-700"><dt>ส่วนลดวิ่ง</dt><dd>{formatNumber(runDiscountPercentShown)}% · {formatNumber(discountTotals.run.discount)} บาท</dd></div><div className="flex justify-between font-semibold text-emerald-700"><dt>ส่วนลดรวม</dt><dd>{formatNumber(discountAmount)} บาท</dd></div><div className="flex justify-between font-semibold text-blue-700"><dt>ยอดสุทธิ</dt><dd>{formatNumber(amount)} บาท</dd></div><div className="flex justify-between text-orange-700"><dt>ค้างชำระ</dt><dd>{outstanding ? `${formatNumber(outstanding)} บาท` : "-"}</dd></div></dl><div className="mt-4 border-t border-slate-100 pt-3"><p className="text-xs font-semibold text-slate-500">บิลในกลุ่ม</p>{rows.map((row) => <div key={row.bill.id} className="mt-2 flex justify-between text-xs"><span>{row.bill.no} · {row.customer}</span><span>{formatNumber(row.bill.amount)} บาท</span></div>)}</div><div className="mt-4 border-t border-slate-100 pt-3"><p className="text-xs font-semibold text-slate-500">รายการเลขที่ซื้อ</p><div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto">{rows.flatMap((row) => row.bill.lines.map((line, index) => <div key={row.bill.id + "-line-" + index} className="flex items-center justify-between gap-2 rounded bg-slate-50 px-2 py-1.5 text-xs"><span><strong>{BET_LABEL[line.type]}</strong> · {line.number}</span><span className="tabular-nums">{formatNumber(line.amount)} บาท</span></div>))}</div></div></div>;
 }
 

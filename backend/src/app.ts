@@ -7,6 +7,7 @@ import type { Config } from "./config";
 import { requireAdmin, requireAuth, requireWrite } from "./middleware/auth";
 import { HttpError, errorHandler } from "./middleware/http";
 import { authRouter } from "./routes/auth";
+import { adminRouter } from "./routes/admin";
 import { billsRouter } from "./routes/bills";
 import { dealersRouter } from "./routes/dealers";
 import { ledgerRouter } from "./routes/ledger";
@@ -32,6 +33,7 @@ export function createApp(config: Config) {
   api.use("/auth", authRouter(config));
 
   api.use(requireAuth(config.JWT_SECRET));
+  api.use("/admin", requireAdmin, adminRouter());
   api.use("/dealers", requireWrite("dealers", "entry"), dealersRouter());
   api.use("/periods", periodsRouter());
   api.use("/ledger", ledgerRouter());

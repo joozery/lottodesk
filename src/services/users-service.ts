@@ -19,3 +19,4 @@ export const fetchUsers = () => api<AdminUser[]>("/users");
 export const createUser = (user: NewUser) => api<AdminUser>("/users", { method: "POST", body: user });
 export const updateUser = (id: string, changes: UserChanges) => api<AdminUser>(`/users/${id}`, { method: "PATCH", body: changes });
 export const deleteUser = (id: string) => api<void>(`/users/${id}`, { method: "DELETE" });
+export const resetBusinessData = () => api<{ deleted: Record<string, number>; preserved: string[] }>("/admin/reset-business-data", { method: "POST" });
