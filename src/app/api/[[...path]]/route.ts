@@ -7,6 +7,7 @@ import { loadConfig } from "../../../../backend/src/config";
 import { connectDb } from "../../../../backend/src/db";
 
 export const maxDuration = 30;
+// Keep this route module refreshed when the embedded backend routes change during development.
 
 interface Runtime { port: Promise<number> }
 const globals = globalThis as typeof globalThis & { __lottodesk?: Runtime };

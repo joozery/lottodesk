@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { X } from "@/components/icons";
+import { Pencil, X } from "@/components/icons";
+import { useState } from "react";
 import { LotteryFlag } from "@/components/dealers/lottery-flag";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useRemote } from "@/hooks/use-remote";
@@ -9,9 +10,11 @@ import { paymentStatusOf, resultOf, type BillView } from "@/lib/bills";
 import { formatDate, formatDateTimeFull, formatNumber, lotteryLabel } from "@/lib/format";
 import { BET_LABEL, RATES, linePrize } from "@/lib/prize-calc";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { fetchPrizeResult } from "@/services/results-service";
 import { PaymentBadge } from "./bill-badges";
 import { BillShareActions } from "./bill-share-actions";
+import { BillEditDialog } from "./bill-edit-dialog";
 
 const baht = (n: number) => `฿${formatNumber(n)}`;
 
@@ -22,7 +25,8 @@ const PAYMENT_BOX = {
 } as const;
 
 /** แผงรายละเอียดบิล: ใช้ทั้งแบบติดข้างรายการ (จอใหญ่) และใน drawer (จอเล็ก) */
-export function BillDetailPanel({ view, onClose }: { view: BillView; onClose?: () => void }) {
+export function BillDetailPanel({ view, onClose, onSaved }: { view: BillView; onClose?: () => void; onSaved?: () => void }) {
+  const [editOpen, setEditOpen] = useState(false);
   const { bill, period } = view;
   const prize = useRemote(`bill-prize-${bill.periodId}`, () => fetchPrizeResult(bill.periodId));
   const rates = bill.rates ?? RATES;
@@ -52,7 +56,7 @@ export function BillDetailPanel({ view, onClose }: { view: BillView; onClose?: (
       <div>
         <div className="flex items-start justify-between gap-3">
           <p className="text-2xl font-bold tracking-tight text-navy">{bill.no}</p>
-          <PaymentBadge bill={bill} />
+          <div className="flex items-center gap-2"><PaymentBadge bill={bill} />{bill.outstanding === bill.amount && <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}><Pencil className="size-4" /> แก้ไข</Button>}</div>
         </div>
         <p className="mt-1.5 flex items-center gap-2 text-sm text-slate-700">
           <LotteryFlag lottery={bill.lottery} />
@@ -117,6 +121,8 @@ export function BillDetailPanel({ view, onClose }: { view: BillView; onClose?: (
       </div>
 
       <BillShareActions view={view} />
+
+      <BillEditDialog bill={bill} open={editOpen} onOpenChange={setEditOpen} onSaved={() => onSaved?.()} />
 
       <div className="flex justify-between text-sm">
         {bill.outstanding > 0 ? <Link href={`/payments?receive=1&billId=${encodeURIComponent(bill.id)}&collectorId=${encodeURIComponent(bill.collectorId)}&customerId=${encodeURIComponent(bill.customerId ?? "")}&amount=${encodeURIComponent(String(bill.outstanding))}&lottery=${bill.lottery}`} className="font-medium text-blue-700 hover:underline">ไปรับเงิน</Link> : <span />}

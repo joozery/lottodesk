@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type RefObject } from "react";
+import { useEffect, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type RefObject } from "react";
 import Link from "next/link";
 import { ArrowLeftRight, Keyboard, Layers3, Pencil, Plus, Printer, Search, Trash2, Upload } from "@/components/icons";
 import { LotteryFilter } from "@/components/dealers/lottery-filter";
@@ -169,6 +169,19 @@ export function EntryPage() {
   const netAmount = Math.round((totals.total - discountAmount) * 100) / 100;
   const paidAmount = Number(paidInput || 0);
   const remainingAmount = Math.round((netAmount - paidAmount) * 100) / 100;
+  const submitBlockedReason = !rows.length
+    ? "กรุณาเพิ่มรายการเลขก่อนบันทึกบิล"
+    : !open
+      ? `งวดนี้ปิดรับแล้ว (วันที่ ${period?.drawDate ?? "ไม่พบงวด"}${period?.status === "confirmed" ? ", ยืนยันผลแล้ว" : ""})`
+      : !customer
+        ? "กรุณาเลือกลูกค้าก่อนบันทึกบิล"
+        : ledgerRemote.loading
+          ? "กำลังโหลดข้อมูลบิลเดิม กรุณารอสักครู่"
+          : !Number.isFinite(netAmount)
+            ? "ยอดสุทธิไม่ถูกต้อง"
+            : remainingAmount < 0
+              ? "ยอดรับมากกว่ายอดสุทธิ"
+              : null;
   const customerBills = (ledgerRemote.data?.bills ?? []).filter((bill) => bill.customerId === customer?.id);
   const customerBilled = customerBills.reduce((sum, bill) => sum + bill.amount, 0);
   const customerOwed = customerBills.reduce((sum, bill) => sum + bill.outstanding, 0);
@@ -369,6 +382,11 @@ export function EntryPage() {
     if (event.key !== "Enter") return;
     event.preventDefault();
     next.current?.focus();
+    next.current?.select();
+  }
+
+  function selectAmountOnFocus(event: FocusEvent<HTMLInputElement>) {
+    event.currentTarget.select();
   }
 
   const categories = [
@@ -459,9 +477,9 @@ export function EntryPage() {
                   <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-bold text-[#102356]">3. คีย์เลข</h2><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">ระบบเลือกอัตโนมัติ: {entryType === "run" ? "วิ่ง" : `${entryType} ตัว`}</span></div>
                   <form onSubmit={addEntry} onKeyDown={(e) => { if (handleShortcut(e.key)) e.preventDefault(); if (e.key === "Escape") { e.preventDefault(); clearEntry(); } }} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(80px,1.2fr)_repeat(3,minmax(65px,0.8fr))_auto]">
                     <label className="text-xs font-medium text-slate-600">เลข<Input ref={numberRef} value={number} onChange={(e) => { const value = e.target.value.replace(/\D/g, "").slice(0, 3); setNumber(value); setEntryType(entryTypeForNumber(value)); }} onKeyDown={(e) => moveOnEnter(e, topRef)} maxLength={3} inputMode="numeric" autoComplete="off" className="mt-1 h-9 font-mono text-lg" aria-label="เลข" /></label>
-                    <label className="text-xs font-medium text-slate-600">บน<Input ref={topRef} value={top} onChange={(e) => setTop(e.target.value)} onKeyDown={(e) => moveOnEnter(e, entryType === "3" ? todRef : bottomRef)} type="number" min="0" inputMode="numeric" className="mt-1" aria-label="บน" /></label>
-                    <label className="text-xs font-medium text-slate-600">โต๊ด<Input ref={todRef} value={tod} onChange={(e) => setTod(e.target.value)} onKeyDown={(e) => moveOnEnter(e, bottomRef)} type="number" min="0" inputMode="numeric" disabled={entryType !== "3"} className="mt-1" aria-label="โต๊ด" /></label>
-                    <label className="text-xs font-medium text-slate-600">ล่าง<Input ref={bottomRef} value={bottom} onChange={(e) => setBottom(e.target.value)} type="number" min="0" inputMode="numeric" className="mt-1" aria-label="ล่าง" /></label>
+                    <label className="text-xs font-medium text-slate-600">บน<Input ref={topRef} value={top} onChange={(e) => setTop(e.target.value)} onFocus={selectAmountOnFocus} onKeyDown={(e) => moveOnEnter(e, entryType === "3" ? todRef : bottomRef)} type="number" min="0" inputMode="numeric" className="mt-1" aria-label="บน" /></label>
+                    <label className="text-xs font-medium text-slate-600">โต๊ด<Input ref={todRef} value={tod} onChange={(e) => setTod(e.target.value)} onFocus={selectAmountOnFocus} onKeyDown={(e) => moveOnEnter(e, bottomRef)} type="number" min="0" inputMode="numeric" disabled={entryType !== "3"} className="mt-1" aria-label="โต๊ด" /></label>
+                    <label className="text-xs font-medium text-slate-600">ล่าง<Input ref={bottomRef} value={bottom} onChange={(e) => setBottom(e.target.value)} onFocus={selectAmountOnFocus} type="number" min="0" inputMode="numeric" className="mt-1" aria-label="ล่าง" /></label>
                     <Button type="submit" disabled={!open} className="col-span-2 sm:col-span-1"><Plus className="size-4" /> {editingId ? "อัปเดตรายการ" : "เพิ่มรายการ"}</Button>
                   </form>
                   <div className="mt-2.5 flex flex-wrap items-center gap-4 text-xs text-slate-600"><label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={reverse} onChange={(e) => setReverse(e.target.checked)} className="accent-blue-600" /> กลับเลข <span className="text-slate-400">(F9)</span></label><label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={lockAmount} onChange={(e) => setLockAmount(e.target.checked)} className="accent-blue-600" /> ล็อกยอดเงิน <span className="text-slate-400">(F8)</span></label><span className="ml-auto text-slate-400">Enter เพิ่มรายการ · Tab ช่องถัดไป · Esc ล้างช่อง</span></div>
@@ -490,7 +508,8 @@ export function EntryPage() {
                   </div>
                   <p className={`mt-3 text-sm font-semibold ${remainingAmount < 0 ? "text-red-700" : "text-orange-700"}`}>ยอดคงเหลือบิลนี้: {money(Number.isFinite(remainingAmount) ? remainingAmount : 0)}</p>
                 </section>
-                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end max-xl:sticky max-xl:bottom-[calc(4.25rem+env(safe-area-inset-bottom))] max-xl:z-20 max-xl:-mx-3 max-xl:border-t max-xl:border-slate-200 max-xl:bg-white/95 max-xl:px-3 max-xl:py-2 max-xl:backdrop-blur"><Button variant="outline" onClick={() => { setSheets(savedSheets); clearEntry(); setNotice("ยกเลิกการแก้ไขที่ยังไม่บันทึกแล้ว"); }} disabled={!dirty} className="min-w-0 sm:flex-1">ยกเลิก</Button><Button onClick={saveSheet} disabled={!dirty} className="min-w-0 sm:flex-[2]"><Layers3 className="size-4" /> เก็บร่าง <span className="hidden sm:inline">{money(totals.total)}</span></Button><Button onClick={() => void submitBill()} disabled={!rows.length || !open || ledgerRemote.loading || submitting || !customer || !Number.isFinite(netAmount) || remainingAmount < 0 || !Number.isFinite(paidAmount)} className="col-span-2 row-start-1 min-w-0 sm:flex-[2]">{submitting ? "กำลังบันทึก..." : "บันทึกบิลและยอดรับ"}</Button></div>
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end max-xl:sticky max-xl:bottom-[calc(4.25rem+env(safe-area-inset-bottom))] max-xl:z-20 max-xl:-mx-3 max-xl:border-t max-xl:border-slate-200 max-xl:bg-white/95 max-xl:px-3 max-xl:py-2 max-xl:backdrop-blur"><Button variant="outline" onClick={() => { setSheets(savedSheets); clearEntry(); setNotice("ยกเลิกการแก้ไขที่ยังไม่บันทึกแล้ว"); }} disabled={!dirty} className="min-w-0 sm:flex-1">ยกเลิก</Button><Button onClick={saveSheet} disabled={!dirty} className="min-w-0 sm:flex-[2]"><Layers3 className="size-4" /> เก็บร่าง <span className="hidden sm:inline">{money(totals.total)}</span></Button><Button onClick={() => void submitBill()} disabled={submitBlockedReason !== null || submitting || !Number.isFinite(paidAmount)} className="col-span-2 row-start-1 min-w-0 sm:flex-[2]">{submitting ? "กำลังบันทึก..." : "บันทึกบิลและยอดรับ"}</Button></div>
+                {submitBlockedReason && <p className="mt-2 text-right text-xs text-amber-700">ยังบันทึกไม่ได้: {submitBlockedReason}</p>}
                 {notice && <p role="status" className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">{notice}</p>}
               </div>
 

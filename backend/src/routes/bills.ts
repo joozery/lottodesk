@@ -32,6 +32,29 @@ const createBody = z.object({
 export function billsRouter() {
   const r = Router();
 
+  r.patch("/:id/lines", async (req, res) => {
+    const body = parse(z.object({ lines: z.array(line).min(1).max(500) }), req.body);
+    const bill = await Bill.findById(req.params.id);
+    if (!bill) throw new HttpError(404, "ไม่พบบิล");
+    const paidAmount = Math.max(0, bill.amount - bill.outstanding);
+    if (paidAmount > 0) throw new HttpError(400, "แก้ไขไม่ได้เนื่องจากบิลนี้มีการรับเงินแล้ว");
+    const period = await Period.findById(bill.periodId).lean();
+    if (!period) throw new HttpError(400, "ไม่พบงวดของบิล");
+    const closedLine = body.lines.find((item) => (period.closedNumbers ?? []).includes(item.number));
+    if (closedLine) throw new HttpError(400, `เลข ${closedLine.number} ปิดรับในงวดนี้ ไม่สามารถซื้อได้`);
+    const grossAmount = body.lines.reduce((sum, item) => sum + item.amount, 0);
+    const discountPercent = bill.discountPercent ?? 0;
+    const discountAmount = Math.round(grossAmount * discountPercent) / 100;
+    const amount = Math.round((grossAmount - discountAmount) * 100) / 100;
+    bill.set("lines", body.lines as never);
+    bill.grossAmount = grossAmount;
+    bill.discountAmount = discountAmount;
+    bill.amount = amount;
+    bill.outstanding = amount;
+    await bill.save();
+    res.json(pubBill(bill.toObject()));
+  });
+
   r.patch("/:id/discount", async (req, res) => {
     const body = parse(z.object({ numberDiscountPercent: z.number().min(0).max(100), runDiscountPercent: z.number().min(0).max(100) }), req.body);
     const bill = await Bill.findById(req.params.id);

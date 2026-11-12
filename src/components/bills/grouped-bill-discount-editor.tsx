@@ -4,18 +4,16 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { BillView } from "@/lib/bills";
 import type { DiscountConfig } from "@/lib/discount";
+import { discountPercentForGross } from "@/lib/discount";
 import { formatNumber } from "@/lib/format";
 import { updateBillDiscount } from "@/services/dealers-service";
 
 export function GroupedBillDiscountEditor({ rows, discountConfig, onSaved }: { rows: BillView[]; discountConfig: DiscountConfig; onSaved?: () => void }) {
   const numberGross = rows.reduce((sum, row) => sum + row.bill.lines.filter((line) => line.type !== "runTop" && line.type !== "runBottom").reduce((lineSum, line) => lineSum + line.amount, 0), 0);
-  const calculatedNumber = numberGross > 0 ? rows.reduce((sum, row) => {
-    const billNumberGross = row.bill.lines.filter((line) => line.type !== "runTop" && line.type !== "runBottom").reduce((lineSum, line) => lineSum + line.amount, 0);
-    return sum + billNumberGross * (row.bill.specialNumberDiscountPercent ?? row.bill.discountPercent ?? 0);
-  }, 0) / numberGross : 0;
+  const configuredNumber = discountPercentForGross("top3", numberGross, discountConfig);
   const currentNumber = rows.length && rows.every((row) => row.bill.specialNumberDiscountPercent !== undefined && row.bill.specialNumberDiscountPercent === rows[0].bill.specialNumberDiscountPercent)
     ? rows[0].bill.specialNumberDiscountPercent
-    : calculatedNumber;
+    : configuredNumber;
   const options = [...new Set([discountConfig.defaults.number, ...discountConfig.tiers.map((tier) => tier.percent), currentNumber])].filter((percent): percent is number => typeof percent === "number").sort((a, b) => a - b);
   const currentRun = discountConfig.defaults.run;
   const [value, setValue] = useState(currentNumber === undefined ? "" : String(currentNumber));

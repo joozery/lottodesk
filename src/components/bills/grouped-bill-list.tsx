@@ -53,7 +53,8 @@ export function GroupedBillDetail({ rows, runDiscountPercent = 0 }: { rows: Bill
     });
     return totals;
   }, { number: { gross: 0, discount: 0 }, run: { gross: 0, discount: 0 } });
-  const numberDiscountPercent = discountTotals.number.gross > 0 ? Math.round((discountTotals.number.discount / discountTotals.number.gross) * 10000) / 100 : 0;
+  const numberTierPercent = Math.max(0, ...rows.map((row) => row.bill.specialNumberDiscountPercent ?? row.bill.discountPercent ?? 0));
+  const numberDiscountPercent = numberTierPercent;
   const runDiscountPercentShown = discountTotals.run.gross > 0 ? Math.round((discountTotals.run.discount / discountTotals.run.gross) * 10000) / 100 : runDiscountPercent;
   const winners = prizeResult.data ? [...rows.reduce((map, row) => {
     row.bill.lines.forEach((line) => {

@@ -30,6 +30,7 @@ export interface NewBill {
   paidAmount?: number;
 }
 export const createBill = (bill: NewBill) => api<Omit<Bill, "prize" | "rates"> & { warnings?: BillWarning[] }>("/bills", { method: "POST", body: bill });
+export const updateBillLines = (billId: string, lines: BetLine[]) => api<Bill>(`/bills/${billId}/lines`, { method: "PATCH", body: { lines } });
 export const updateBillDiscount = (billId: string, numberDiscountPercent: number, runDiscountPercent: number) => api<Bill>(`/bills/${billId}/discount`, { method: "PATCH", body: { numberDiscountPercent, runDiscountPercent } });
 
 export const createDealer = (name: string) => api<Dealer>("/dealers", { method: "POST", body: { name } });
