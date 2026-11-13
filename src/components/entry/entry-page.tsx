@@ -472,8 +472,8 @@ export function EntryPage() {
                 </section>
               </aside>
 
-              <div className="min-w-0 space-y-3 max-lg:order-1">
-                <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:p-3.5">
+              <div className="min-w-0 flex flex-col gap-3 max-lg:order-1">
+                <section className="order-2 sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-20 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur lg:bottom-3 sm:p-3.5">
                   <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-bold text-[#102356]">3. คีย์เลข</h2><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">ระบบเลือกอัตโนมัติ: {entryType === "run" ? "วิ่ง" : `${entryType} ตัว`}</span></div>
                   <form onSubmit={addEntry} onKeyDown={(e) => { if (handleShortcut(e.key)) e.preventDefault(); if (e.key === "Escape") { e.preventDefault(); clearEntry(); } }} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(80px,1.2fr)_repeat(3,minmax(65px,0.8fr))_auto]">
                     <label className="text-xs font-medium text-slate-600">เลข<Input ref={numberRef} value={number} onChange={(e) => { const value = e.target.value.replace(/\D/g, "").slice(0, 3); setNumber(value); setEntryType(entryTypeForNumber(value)); }} onKeyDown={(e) => moveOnEnter(e, topRef)} maxLength={3} inputMode="numeric" autoComplete="off" className="mt-1 h-9 font-mono text-lg" aria-label="เลข" /></label>
@@ -484,7 +484,7 @@ export function EntryPage() {
                   </form>
                   <div className="mt-2.5 flex flex-wrap items-center gap-4 text-xs text-slate-600"><label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={reverse} onChange={(e) => setReverse(e.target.checked)} className="accent-blue-600" /> กลับเลข <span className="text-slate-400">(F9)</span></label><label className="inline-flex items-center gap-1.5"><input type="checkbox" checked={lockAmount} onChange={(e) => setLockAmount(e.target.checked)} className="accent-blue-600" /> ล็อกยอดเงิน <span className="text-slate-400">(F8)</span></label><span className="ml-auto text-slate-400">Enter เพิ่มรายการ · Tab ช่องถัดไป · Esc ล้างช่อง</span></div>
                 </section>
-                <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                <section className="order-1 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2.5"><div className="flex items-center gap-2"><h2 className="text-base font-bold text-blue-700">แผ่นที่ {sheet}</h2><span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{formatNumber(rows.length)} รายการ</span></div><div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => updateRows(rows.map((row) => ({ ...row, number: row.number.split("").reverse().join("") })))} disabled={!rows.length || !open}><ArrowLeftRight className="size-4" /> กลับเลข</Button><input ref={fileRef} type="file" accept=".csv,.txt,text/csv,text/plain" className="hidden" onChange={(e) => void importFile(e.target.files?.[0])} /><Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={!open}><Upload className="size-4" /> นำเข้า</Button><Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="size-4" /> พิมพ์บิล</Button></div></div>
                   <div className="max-h-[45vh] space-y-2 overflow-y-auto p-3 sm:hidden">
                     {rows.length === 0 && <p className="py-5 text-center text-sm text-slate-500">ยังไม่มีเลขในแผ่นนี้ เริ่มคีย์เลขด้านบน</p>}
@@ -498,7 +498,7 @@ export function EntryPage() {
                   <div className="grid gap-2 border-t border-slate-200 bg-slate-50 px-4 py-2 text-sm sm:grid-cols-[auto_1fr_1fr_1fr]"><span className="font-semibold">{formatNumber(rows.length)} รายการ</span><span>บน <strong className="ml-2 text-blue-700">{money(totals.top)}</strong></span><span>โต๊ด <strong className="ml-2 text-blue-700">{money(totals.tod)}</strong></span><span>ล่าง <strong className="ml-2 text-blue-700">{money(totals.bottom)}</strong></span></div>
                 </section>
 
-                <section className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+                <section className="order-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
                   <h2 className="font-bold text-[#102356]">4. ตรวจยอดและรับเงินก่อนออกบิล</h2>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                     <div><p className="text-xs text-slate-500">ยอดเลขทั้งหมด</p><p className="text-lg font-bold tabular-nums">{money(totals.total)}</p></div>
@@ -508,9 +508,9 @@ export function EntryPage() {
                   </div>
                   <p className={`mt-3 text-sm font-semibold ${remainingAmount < 0 ? "text-red-700" : "text-orange-700"}`}>ยอดคงเหลือบิลนี้: {money(Number.isFinite(remainingAmount) ? remainingAmount : 0)}</p>
                 </section>
-                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end max-xl:sticky max-xl:bottom-[calc(4.25rem+env(safe-area-inset-bottom))] max-xl:z-20 max-xl:-mx-3 max-xl:border-t max-xl:border-slate-200 max-xl:bg-white/95 max-xl:px-3 max-xl:py-2 max-xl:backdrop-blur"><Button variant="outline" onClick={() => { setSheets(savedSheets); clearEntry(); setNotice("ยกเลิกการแก้ไขที่ยังไม่บันทึกแล้ว"); }} disabled={!dirty} className="min-w-0 sm:flex-1">ยกเลิก</Button><Button onClick={saveSheet} disabled={!dirty} className="min-w-0 sm:flex-[2]"><Layers3 className="size-4" /> เก็บร่าง <span className="hidden sm:inline">{money(totals.total)}</span></Button><Button onClick={() => void submitBill()} disabled={submitBlockedReason !== null || submitting || !Number.isFinite(paidAmount)} className="col-span-2 row-start-1 min-w-0 sm:flex-[2]">{submitting ? "กำลังบันทึก..." : "บันทึกบิลและยอดรับ"}</Button></div>
-                {submitBlockedReason && <p className="mt-2 text-right text-xs text-amber-700">ยังบันทึกไม่ได้: {submitBlockedReason}</p>}
-                {notice && <p role="status" className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">{notice}</p>}
+                <div className="order-4 grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end max-xl:sticky max-xl:bottom-[calc(4.25rem+env(safe-area-inset-bottom))] max-xl:z-20 max-xl:-mx-3 max-xl:border-t max-xl:border-slate-200 max-xl:bg-white/95 max-xl:px-3 max-xl:py-2 max-xl:backdrop-blur"><Button variant="outline" onClick={() => { setSheets(savedSheets); clearEntry(); setNotice("ยกเลิกการแก้ไขที่ยังไม่บันทึกแล้ว"); }} disabled={!dirty} className="min-w-0 sm:flex-1">ยกเลิก</Button><Button onClick={saveSheet} disabled={!dirty} className="min-w-0 sm:flex-[2]"><Layers3 className="size-4" /> เก็บร่าง <span className="hidden sm:inline">{money(totals.total)}</span></Button><Button onClick={() => void submitBill()} disabled={submitBlockedReason !== null || submitting || !Number.isFinite(paidAmount)} className="col-span-2 row-start-1 min-w-0 sm:flex-[2]">{submitting ? "กำลังบันทึก..." : "บันทึกบิลและยอดรับ"}</Button></div>
+                {submitBlockedReason && <p className="order-5 mt-2 text-right text-xs text-amber-700">ยังบันทึกไม่ได้: {submitBlockedReason}</p>}
+                {notice && <p role="status" className="order-6 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">{notice}</p>}
               </div>
 
               <aside className="min-w-0 space-y-3 max-lg:order-2 lg:col-start-2 xl:col-start-3 xl:row-start-1">
