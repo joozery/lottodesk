@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { AlertCircle, Calendar, Plus, Trash2 } from "@/components/icons";
 import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/ui/button";
@@ -16,10 +16,6 @@ import { createPeriod, fetchPeriods, updateLimitedNumbers } from "@/services/dea
 import { fetchRates } from "@/services/rates-service";
 import { SettingsTabs } from "../settings-tabs";
 import { resetBusinessData } from "@/services/users-service";
-
-function today() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
-}
 
 function uniquePermutations(value: string) {
   const result = new Set<string>();
@@ -39,7 +35,6 @@ export function PeriodsSettingsPage() {
   const [drawDate, setDrawDate] = useState("");
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
-  const [minimumDate, setMinimumDate] = useState("");
   const [editingPeriodId, setEditingPeriodId] = useState<string | null>(null);
   const [limitEntries, setLimitEntries] = useState<Record<string, string>>({});
   const [limitNumber, setLimitNumber] = useState("");
@@ -53,7 +48,6 @@ export function PeriodsSettingsPage() {
   const [resetting, setResetting] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetConfirmation, setResetConfirmation] = useState("");
-  useEffect(() => setMinimumDate(today()), []);
   const sortedPeriods = useMemo(() => [...(periods ?? [])].sort((a, b) => b.drawDate.localeCompare(a.drawDate)), [periods]);
   const fallbackRates = { ...RATES, ...(rateConfig?.rates ?? {}) };
   const effectiveRates = { ...fallbackRates, ...Object.fromEntries(Object.entries(rateEntries).filter(([, value]) => value !== "").map(([type, value]) => [type, Number(value)])) };
@@ -105,7 +99,6 @@ export function PeriodsSettingsPage() {
   async function save() {
     setNotice(null);
     if (!drawDate) { setNotice({ ok: false, text: "กรุณาเลือกวันที่ออกรางวัล" }); return; }
-    if (minimumDate && drawDate < minimumDate) { setNotice({ ok: false, text: "สามารถสร้างงวดล่วงหน้าได้ แต่วันที่ต้องไม่ย้อนหลัง" }); return; }
     setSaving(true);
     try {
       await createPeriod(lottery, drawDate);
@@ -141,7 +134,7 @@ export function PeriodsSettingsPage() {
           <div className="flex items-center gap-2"><Calendar className="size-5 text-blue-600" /><h2 className="font-semibold text-slate-900">สร้างงวดใหม่</h2></div>
           <div className="mt-4 grid gap-3 sm:grid-cols-[180px_220px_auto] sm:items-end">
             <label className="text-sm font-medium text-slate-700">ประเภทหวย<Select value={lottery} onValueChange={(value) => setLottery(value as Lottery)}><SelectTrigger className="mt-1" aria-label="ประเภทหวย" /><SelectContent><SelectItem value="thai">หวยไทย</SelectItem><SelectItem value="lao">หวยลาว</SelectItem></SelectContent></Select></label>
-            <label className="text-sm font-medium text-slate-700">วันที่ออกรางวัล<Input className="mt-1" type="date" min={minimumDate || undefined} value={drawDate} onChange={(e) => setDrawDate(e.target.value)} aria-label="วันที่ออกรางวัล" /></label>
+            <label className="text-sm font-medium text-slate-700">วันที่ออกรางวัล<Input className="mt-1" type="date" value={drawDate} onChange={(e) => setDrawDate(e.target.value)} aria-label="วันที่ออกรางวัล" /></label>
             <Button onClick={() => void save()} disabled={saving}>{saving ? "กำลังสร้าง..." : <><Plus className="size-4" /> สร้างงวด</>}</Button>
           </div>
           {notice && <p role="status" className={`mt-3 rounded-lg p-3 text-sm ${notice.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{notice.text}</p>}

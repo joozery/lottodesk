@@ -82,6 +82,78 @@ function parseImportedRows(content: string): EntryRow[] {
   }).filter((row): row is EntryRow => row !== null);
 }
 
+type AutoMode = "top" | "bottom" | "both";
+type ParsedAutoRow = Omit<EntryRow, "id">;
+
+function parseAutoEntry(content: string): { rows: ParsedAutoRow[]; ignored: string[] } {
+  let mode: AutoMode = "top";
+  const rows: ParsedAutoRow[] = [];
+  const ignored: string[] = [];
+  const add = (number: string, top: number, tod: number, bottom: number) => {
+    const current = rows.find((row) => row.number === number && row.type === (number.length === 3 ? "3" : "2"));
+    if (current) { current.top += top; current.tod += tod; current.bottom += bottom; return; }
+    rows.push({ number, type: number.length === 3 ? "3" : "2", top, tod, bottom });
+  };
+  const addNumber = (number: string, amount: number, extra: number | undefined, activeMode: AutoMode = mode) => {
+    if (number.length === 3) {
+      add(number, activeMode === "top" ? amount : 0, extra ?? 0, activeMode === "bottom" ? amount : 0);
+      return;
+    }
+    if (activeMode === "both") { add(number, amount, 0, extra ?? amount); return; }
+    add(number, activeMode === "top" ? amount : 0, 0, activeMode === "bottom" ? amount : 0);
+    if (extra !== undefined && extra > 0) {
+      const reverse = number.split("").reverse().join("");
+      add(reverse, activeMode === "top" ? extra : 0, 0, activeMode === "bottom" ? extra : 0);
+    }
+  };
+
+  for (const source of content.split(/\r?\n/)) {
+    const line = source.trim();
+    if (!line) continue;
+    const normalized = line.replace(/\s+/g, " ");
+    if (/^บน(?:\s*[-/]\s*ล่าง|ล่าง)$/.test(normalized)) { mode = "both"; continue; }
+    if (/^บน$|^2\s*ตัวบน$|^3\s*ตัว(?:ตรง|บน)?$/i.test(normalized)) { mode = "top"; continue; }
+    if (/^ล่าง$|^2\s*ตัวล่าง$/i.test(normalized)) { mode = "bottom"; continue; }
+
+    let lineMode = mode;
+    let lineText = normalized;
+    const inlineMode = normalized.match(/^(.*?)\s*(บน|ล่าง)\s*(.+)$/);
+    if (inlineMode) {
+      lineMode = inlineMode[2] === "บน" ? "top" : "bottom";
+      lineText = `${inlineMode[1]} ${inlineMode[3]}`.trim();
+    }
+
+    const shared = lineText.match(/ตัวละ\s*(\d+(?:\.\d+)?)\s*(?:[x*]\s*(\d+(?:\.\d+)?))?/i);
+    const sharedAmount = shared ? Number(shared[1]) : undefined;
+    const sharedExtra = shared?.[2] ? Number(shared[2]) : undefined;
+    const todOnly = /โต๊ด|6\s*กลับ/i.test(lineText);
+    const numberTokens = [...lineText.matchAll(/(?<!\d)(\d{2,3})(?!\d)/g)].map((match) => match[1]);
+    if (sharedAmount !== undefined && numberTokens.length > 0) {
+      numberTokens.forEach((number) => {
+        if (number.length === 3 && todOnly) { add(number, 0, sharedAmount, 0); return; }
+        const reverseIncluded = number.length === 2 && numberTokens.includes(number.split("").reverse().join(""));
+        addNumber(number, sharedAmount, reverseIncluded ? undefined : sharedExtra, lineMode);
+      });
+      continue;
+    }
+
+    const match = lineText.match(/^(\d{2,3})\s*(?:=\s*)?(\d+(?:\.\d+)?)\s*(?:[x*]\s*(\d+(?:\.\d+)?))?$/);
+    if (match) {
+      addNumber(match[1], Number(match[2]), match[3] ? Number(match[3]) : undefined, lineMode);
+      continue;
+    }
+    const compact = lineText.match(/^(\d{4,6})(?:\s*[x*]\s*(\d+(?:\.\d+)?))?$/);
+    if (compact) {
+      const digits = compact[1];
+      const numberLength = digits.length >= 5 ? 3 : 2;
+      addNumber(digits.slice(0, numberLength), Number(digits.slice(numberLength)), compact[2] ? Number(compact[2]) : undefined, lineMode);
+      continue;
+    }
+    ignored.push(line);
+  }
+  return { rows, ignored };
+}
+
 export function EntryPage() {
   const [nonce, setNonce] = useState(0);
   const dealersRemote = useRemote(`entry-dealers-${nonce}`, fetchDealers);
@@ -96,6 +168,7 @@ export function EntryPage() {
   const [customerChoice, setCustomerChoice] = useState("");
   const [sheet, setSheet] = useState(1);
   const [search, setSearch] = useState("");
+  const [autoText, setAutoText] = useState("");
   const [entryType, setEntryType] = useState<EntryType>("3");
   const [number, setNumber] = useState("");
   const [top, setTop] = useState("");
@@ -149,7 +222,7 @@ export function EntryPage() {
   const period = periodOptions.find((p) => p.id === periodChoice) ?? preferredPeriod(periods, lottery);
   // โหลดบิลของงวดพร้อมกับรายการงวดเลย (ไม่รอ) — "open" ให้เซิร์ฟเวอร์เลือกงวดที่เปิดรับอยู่ให้ตรงกับ preferredPeriod
   const ledgerRemote = useRemote(`entry-ledger-${nonce}-${lottery}-${periodChoice ?? "open"}`, () => fetchLedger({ lottery, periodId: periodChoice ?? "open", from: "", to: "" }));
-  const open = !!period && period.status === "pending" && period.drawDate >= localDate();
+  const open = Boolean(period);
   const prefix = [lottery, period?.id ?? "", dealer?.id ?? "", collector?.id ?? "", customer?.id ?? ""].join("|");
   const key = sheetKey(lottery, period?.id ?? "", dealer?.id ?? "", collector?.id ?? "", customer?.id ?? "", sheet);
   const rows = sheets[key] ?? [];
@@ -224,6 +297,23 @@ export function EntryPage() {
   function updateRows(next: EntryRow[]) {
     setSheets((current) => ({ ...current, [key]: next }));
     setNotice("");
+  }
+
+  function applyAutoEntry() {
+    if (!open) { setNotice("งวดนี้ปิดรับแล้ว กรุณาเลือกงวดที่เปิดรับ"); return; }
+    const parsed = parseAutoEntry(autoText);
+    if (!parsed.rows.length) { setNotice("ยังอ่านรายการไม่ออก ลองใช้รูปแบบ เช่น บน แล้วพิมพ์ 7350 หรือ 524 30x30"); return; }
+    const allowed = parsed.rows.filter((row) => !closedSet.has(row.number));
+    const blocked = parsed.rows.length - allowed.length;
+    const next = allowed.map((row, index) => ({ ...row, id: `auto-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}` }));
+    updateRows([...rows, ...next]);
+    setAutoText("");
+    const notes = [
+      `แปลงลงตารางแล้ว ${next.length} รายการ`,
+      blocked ? `ข้ามเลขปิดรับ ${blocked} รายการ` : "",
+      parsed.ignored.length ? `อ่านไม่ได้ ${parsed.ignored.length} บรรทัด` : "",
+    ].filter(Boolean);
+    setNotice(notes.join(" · "));
   }
 
   function clearEntry(clearAmounts = false) {
@@ -414,7 +504,7 @@ export function EntryPage() {
               <SelectTrigger className="w-40 flex-1 sm:w-44" aria-label="งวดหวย" />
               <SelectContent>{periodOptions.map((p) => <SelectItem key={p.id} value={p.id}>{formatDate(p.drawDate)}{p.status === "confirmed" ? " · ยืนยันผลแล้ว" : ""}</SelectItem>)}</SelectContent>
             </Select>
-            <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${open ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}><span className={`mr-1.5 inline-block size-2 rounded-full ${open ? "bg-emerald-500" : "bg-slate-400"}`} />{open ? "เปิดรับ" : "ปิดรับ"}</span>
+            <span className={`rounded-full px-3 py-1.5 text-xs font-semibold ${open ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}><span className={`mr-1.5 inline-block size-2 rounded-full ${open ? "bg-emerald-500" : "bg-slate-400"}`} />{open ? (period?.status === "confirmed" ? "เปิดคีย์ย้อนหลัง" : "เปิดรับ") : "ปิดรับ"}</span>
           </div>
         </div>
 
@@ -475,6 +565,10 @@ export function EntryPage() {
               <div className="min-w-0 flex flex-col gap-3 max-lg:order-1">
                 <section className="order-2 sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-20 rounded-xl border border-slate-200 bg-white/95 p-3 shadow-sm backdrop-blur lg:bottom-3 sm:p-3.5">
                   <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2"><h2 className="text-base font-bold text-[#102356]">3. คีย์เลข</h2><span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">ระบบเลือกอัตโนมัติ: {entryType === "run" ? "วิ่ง" : `${entryType} ตัว`}</span></div>
+                  <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50/60 p-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs font-semibold text-blue-900">วางข้อความหลายบรรทัดแล้วแปลงอัตโนมัติ</p><span className="text-[11px] text-blue-700">เช่น บน → 7350 หรือ 524 30x30</span></div>
+                    <div className="mt-2 flex flex-col gap-2 sm:flex-row"><textarea value={autoText} onChange={(event) => setAutoText(event.target.value)} placeholder={'บน\n7350\nล่าง\n4350'} aria-label="ข้อความคีย์โพยอัตโนมัติ" className="min-h-20 min-w-0 flex-1 resize-y rounded-lg border border-blue-200 bg-white px-3 py-2 font-mono text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600" /><Button type="button" size="sm" onClick={applyAutoEntry} disabled={!open || !autoText.trim()} className="sm:self-end">แปลงลงตาราง</Button></div>
+                  </div>
                   <form onSubmit={addEntry} onKeyDown={(e) => { if (handleShortcut(e.key)) e.preventDefault(); if (e.key === "Escape") { e.preventDefault(); clearEntry(); } }} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(80px,1.2fr)_repeat(3,minmax(65px,0.8fr))_auto]">
                     <label className="text-xs font-medium text-slate-600">เลข<Input ref={numberRef} value={number} onChange={(e) => { const value = e.target.value.replace(/\D/g, "").slice(0, 3); setNumber(value); setEntryType(entryTypeForNumber(value)); }} onKeyDown={(e) => moveOnEnter(e, topRef)} maxLength={3} inputMode="numeric" autoComplete="off" className="mt-1 h-9 font-mono text-lg" aria-label="เลข" /></label>
                     <label className="text-xs font-medium text-slate-600">บน<Input ref={topRef} value={top} onChange={(e) => setTop(e.target.value)} onFocus={selectAmountOnFocus} onKeyDown={(e) => moveOnEnter(e, entryType === "3" ? todRef : bottomRef)} type="number" min="0" inputMode="numeric" className="mt-1" aria-label="บน" /></label>
