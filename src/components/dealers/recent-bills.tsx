@@ -5,12 +5,11 @@ import { BillsTable } from "./bills-table";
 interface RecentBillsProps {
   bills: Bill[];
   periods: ReadonlyMap<string, Period>;
-  customerNames: ReadonlyMap<string, string>;
-  collectorName: string;
+  ownerName: string;
   loading: boolean;
 }
 
-export function RecentBills({ bills, periods, customerNames, collectorName, loading }: RecentBillsProps) {
+export function RecentBills({ bills, periods, ownerName, loading }: RecentBillsProps) {
   const latest = [...bills].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-3.5">
@@ -18,7 +17,7 @@ export function RecentBills({ bills, periods, customerNames, collectorName, load
       {loading ? (
         <Skeleton className="h-40" />
       ) : (
-        <BillsTable bills={latest} periods={periods} customerNames={customerNames} ownLabel={`${collectorName} (โพยตัวเอง)`} compact />
+        <BillsTable bills={latest} periods={periods} ownerName={ownerName} compact />
       )}
     </section>
   );

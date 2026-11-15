@@ -61,11 +61,10 @@ export function PaymentsPage() {
     const payPrize = params.get("payPrize") === "1";
     if (params.get("receive") !== "1" && !payPrize) return;
     const collectorId = params.get("collectorId") ?? undefined;
-    const customerId = params.get("customerId") ?? undefined;
     const billId = params.get("billId") ?? undefined;
     const amount = Number(params.get("amount"));
     // eslint-disable-next-line react-hooks/set-state-in-effect -- เปิดฟอร์มรับเงินจากลิงก์ที่ส่งมาจากบิล
-    setDialog({ direction: payPrize ? "out" : "in", defaults: { collectorId, customerId, billId, amount: Number.isFinite(amount) && amount > 0 ? amount : undefined, note: payPrize ? "จ่ายเงินรางวัล" : undefined } });
+    setDialog({ direction: payPrize ? "out" : "in", defaults: { collectorId, billId, amount: Number.isFinite(amount) && amount > 0 ? amount : undefined, note: payPrize ? "จ่ายเงินรางวัล" : undefined } });
     window.history.replaceState({}, "", "/payments");
   }, []);
 
@@ -97,7 +96,7 @@ export function PaymentsPage() {
 
   const openDialog = (direction: "in" | "out", defaults: PaymentDefaults = {}) => setDialog({ direction, defaults });
   const receive = (r: DebtorRow) =>
-    openDialog("in", { collectorId: r.collectorId, customerId: r.customerId ?? undefined, amount: r.amount });
+    openDialog("in", { collectorId: r.collectorId, amount: r.amount });
 
   function saved(p: Payment) {
     const day = bangkokDate(p.at);
@@ -105,7 +104,7 @@ export function PaymentsPage() {
     setRange((r) => ({ from: day < r.from ? day : r.from, to: day > r.to ? day : r.to }));
     setNotice(
       `${p.direction === "in" ? "บันทึกรับเงิน" : "บันทึกจ่ายเงิน"} ${formatBaht(p.amount)} แล้ว` +
-        (p.direction === "in" && p.customerId ? " และหักยอดค้างชำระของลูกค้าแล้ว" : ""),
+        (p.direction === "in" ? " และหักยอดค้างชำระของลูกค้าหลักแล้ว" : ""),
     );
     setNonce((n) => n + 1);
   }

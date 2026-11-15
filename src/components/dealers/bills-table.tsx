@@ -8,16 +8,14 @@ import { LotteryFlag } from "./lottery-flag";
 interface BillsTableProps {
   bills: Bill[];
   periods: ReadonlyMap<string, Period>;
-  /** customerId → ชื่อ; bill ที่ customerId = null แสดง ownLabel */
-  customerNames: ReadonlyMap<string, string>;
-  ownLabel: string;
+  ownerName: string;
   showCustomer?: boolean;
   showPrize?: boolean;
   /** แสดงประเภทหวยเป็นธงอย่างเดียว ใช้ในการ์ดที่พื้นที่แคบ */
   compact?: boolean;
 }
 
-export function BillsTable({ bills, periods, customerNames, ownLabel, showCustomer = true, showPrize = false, compact = false }: BillsTableProps) {
+export function BillsTable({ bills, periods, ownerName, showCustomer = true, showPrize = false, compact = false }: BillsTableProps) {
   if (bills.length === 0) return <EmptyState title="ไม่มีบิลในช่วงที่เลือก" />;
   return (
     <div className="overflow-x-auto">
@@ -39,7 +37,7 @@ export function BillsTable({ bills, periods, customerNames, ownLabel, showCustom
               <tr key={b.id} className="border-b border-slate-50 last:border-0">
                 <td className="whitespace-nowrap py-2.5 pr-3 font-medium text-slate-800">{b.no}</td>
                 {showCustomer && (
-                  <td className="py-2.5 pr-3 text-slate-700">{b.customerId ? customerNames.get(b.customerId) ?? "-" : ownLabel}</td>
+                  <td className="py-2.5 pr-3 text-slate-700">{ownerName}</td>
                 )}
                 <td className="py-2.5 pr-3">
                   {compact ? (

@@ -16,14 +16,13 @@ interface Hit {
   label: string;
   hint: string;
   collectorId: string;
-  customerId?: string;
 }
 
 interface TopBarProps {
   breadcrumb: string[];
   /** ส่ง dealers + onPick เพื่อเปิดใช้การค้นหาส่วนกลาง */
   dealers?: Dealer[] | null;
-  onPick?: (collectorId: string, customerId?: string) => void;
+  onPick?: (collectorId: string) => void;
 }
 
 export function TopBar({ breadcrumb, dealers, onPick }: TopBarProps) {
@@ -45,11 +44,6 @@ export function TopBar({ breadcrumb, dealers, onPick }: TopBarProps) {
         if (c.name.toLowerCase().includes(q)) {
           out.push({ key: c.id, label: c.name, hint: `ผู้รวบรวมโพย · ${d.name}`, collectorId: c.id });
         }
-        for (const cu of c.customers) {
-          if (cu.name.toLowerCase().includes(q) || cu.code.toLowerCase().includes(q)) {
-            out.push({ key: cu.id, label: `${cu.name} (${cu.code})`, hint: `ลูกค้า · ${c.name}`, collectorId: c.id, customerId: cu.id });
-          }
-        }
       }
     }
     return out.slice(0, 8);
@@ -65,7 +59,7 @@ export function TopBar({ breadcrumb, dealers, onPick }: TopBarProps) {
             className="flex w-full flex-col px-3 py-2 text-left hover:bg-blue-50 max-sm:py-3"
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
-              onPick?.(h.collectorId, h.customerId);
+              onPick?.(h.collectorId);
               setQuery("");
               setSearchOpen(false);
             }}

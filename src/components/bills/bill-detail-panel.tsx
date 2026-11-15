@@ -67,7 +67,7 @@ export function BillDetailPanel({ view, onClose, onSaved }: { view: BillView; on
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 rounded-lg bg-slate-50 px-3.5 py-3 text-sm">
         <dt className="text-slate-500">ผู้ส่งโพย</dt><dd className="font-medium text-slate-900">{view.collector}</dd>
-        <dt className="text-slate-500">เจ้าของโพย</dt><dd className="font-medium text-slate-900">{view.customer}{view.code ? ` (${view.code})` : ""}{bill.outstanding <= 0 && <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold text-emerald-700">ชำระแล้ว</span>}</dd>
+        <dt className="text-slate-500">ลูกค้าหลัก</dt><dd className="font-medium text-slate-900">{view.customer}{bill.outstanding <= 0 && <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-semibold text-emerald-700">ชำระแล้ว</span>}</dd>
       </dl>
 
       <section aria-label="รายการเลข" className="overflow-hidden rounded-lg border border-slate-200">
@@ -125,7 +125,7 @@ export function BillDetailPanel({ view, onClose, onSaved }: { view: BillView; on
       <BillEditDialog bill={bill} open={editOpen} onOpenChange={setEditOpen} onSaved={() => onSaved?.()} />
 
       <div className="flex justify-between text-sm">
-        {bill.outstanding > 0 ? <Link href={`/payments?receive=1&billId=${encodeURIComponent(bill.id)}&collectorId=${encodeURIComponent(bill.collectorId)}&customerId=${encodeURIComponent(bill.customerId ?? "")}&amount=${encodeURIComponent(String(bill.outstanding))}&lottery=${bill.lottery}`} className="font-medium text-blue-700 hover:underline">ไปรับเงิน</Link> : <span />}
+        {bill.outstanding > 0 ? <Link href={`/payments?receive=1&billId=${encodeURIComponent(bill.id)}&collectorId=${encodeURIComponent(bill.collectorId)}&amount=${encodeURIComponent(String(bill.outstanding))}&lottery=${bill.lottery}`} className="font-medium text-blue-700 hover:underline">ไปรับเงิน</Link> : <span />}
         <Link href="/entry" className="font-medium text-blue-700 hover:underline">คีย์โพยเพิ่ม</Link>
       </div>
     </div>

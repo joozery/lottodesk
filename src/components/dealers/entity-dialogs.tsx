@@ -2,7 +2,7 @@
 
 import { Input } from "@/components/ui/input";
 import type { Collector, Dealer } from "@/lib/types";
-import { createCollector, createCustomer, createDealer, renameCollector } from "@/services/dealers-service";
+import { createCollector, createDealer, renameCollector } from "@/services/dealers-service";
 import { Field, FormDialog, type Errors, type Values } from "./form-dialog";
 
 interface BaseProps {
@@ -47,6 +47,3 @@ export const EditCollectorDialog = ({ dealer, collector, onSaved, ...p }: BasePr
   <NameDialog {...p} title="แก้ไขข้อมูลผู้รวบรวมโพย" description={`แก้ไขข้อมูลของ ${collector.name}`} label="ชื่อ" initName={collector.name} save={async (name) => { await renameCollector(dealer.id, collector.id, name); onSaved(); }} />
 );
 
-export const AddCustomerDialog = ({ dealer, collector, onSaved, ...p }: BaseProps & Saved & { dealer: Dealer; collector: Collector }) => (
-  <NameDialog {...p} title="เพิ่มลูกค้าย่อย" description={`เพิ่มลูกค้าภายใต้ ${collector.name}`} label="ชื่อลูกค้า" initName="" save={async (name) => { await createCustomer(dealer.id, collector.id, name); onSaved(); }} />
-);

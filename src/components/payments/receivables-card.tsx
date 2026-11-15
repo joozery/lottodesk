@@ -32,11 +32,7 @@ export function ReceivablesCard({ rows, onReceive }: Props) {
               </div>
               <Amount value={r.amount} kind="outstanding" className="text-sm font-semibold" />
               {/* โพยตัวเองของผู้รวบรวมไม่ผูกกับลูกค้า จึงหักยอดค้างจากการรับเงินไม่ได้ */}
-              {r.customerId ? (
-                <Button size="sm" variant="soft" onClick={() => onReceive(r)}>รับเงิน</Button>
-              ) : (
-                <span className="w-[58px]" />
-              )}
+              <Button size="sm" variant="soft" onClick={() => onReceive(r)}>รับเงิน</Button>
             </li>
           ))}
         </ul>

@@ -3,8 +3,6 @@ import type { Bill, Dealer, Period } from "./types";
 export interface BillView {
   bill: Bill;
   customer: string;
-  /** รหัสลูกค้า (null = โพยตัวเองของผู้รวบรวม) */
-  code: string | null;
   collector: string;
   dealer: string;
   period: Period | undefined;
@@ -13,11 +11,9 @@ export interface BillView {
 export function describeBill(bill: Bill, dealers: readonly Dealer[], period: Period | undefined): BillView {
   const dealer = dealers.find((d) => d.collectors.some((c) => c.id === bill.collectorId));
   const collector = dealer?.collectors.find((c) => c.id === bill.collectorId);
-  const customer = collector?.customers.find((c) => c.id === bill.customerId);
   return {
     bill,
-    customer: customer?.name ?? `${collector?.name ?? "-"} (โพยตัวเอง)`,
-    code: customer?.code ?? null,
+    customer: collector?.name ?? "-",
     collector: collector?.name ?? "-",
     dealer: dealer?.name ?? "-",
     period,
@@ -46,7 +42,7 @@ export const SORTERS: Record<SortKey, (a: BillView, b: BillView) => number> = {
 
 export function matchesQuery(v: BillView, query: string) {
   const q = query.trim().toLowerCase();
-  return !q || [v.bill.no, v.customer, v.code ?? "", v.collector, v.dealer].some((s) => s.toLowerCase().includes(q));
+  return !q || [v.bill.no, v.customer, v.collector, v.dealer].some((s) => s.toLowerCase().includes(q));
 }
 
 export type PaymentStatus = "paid" | "partial" | "unpaid";

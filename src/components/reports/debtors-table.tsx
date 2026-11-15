@@ -29,7 +29,6 @@ export function DebtorsTable({ rows }: { rows: DebtorRow[] | null }) {
                 <tr key={r.key} className="border-b border-slate-100">
                   <td className="py-2.5 pr-3">
                     <p className="font-medium text-slate-900">{r.name}</p>
-                    {r.code && <p className="text-xs text-slate-500">รหัส {r.code}</p>}
                   </td>
                   <td className="py-2.5 pr-3 text-slate-600">{r.dealer} → {r.collector}</td>
                   <td className="py-2.5 pr-3 text-right tabular-nums text-slate-700">{r.billCount}</td>
@@ -51,7 +50,7 @@ export function DebtorsTable({ rows }: { rows: DebtorRow[] | null }) {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-medium text-slate-900">{r.name}</p>
-                  <p className="text-xs text-slate-500">{r.code ? `รหัส ${r.code} · ` : ""}{r.dealer} → {r.collector}</p>
+                  <p className="text-xs text-slate-500">{r.dealer} → {r.collector}</p>
                 </div>
                 <Amount value={r.amount} kind="outstanding" className="shrink-0 text-base font-semibold" />
               </div>

@@ -27,18 +27,18 @@ if (reset) {
 await Dealer.insertMany(DEALERS.map((d) => ({
   _id: d.id,
   name: d.name,
-  collectors: d.collectors.map((c) => ({ _id: c.id, name: c.name, customers: c.customers.map((u) => ({ _id: u.id, code: u.code, name: u.name })) })),
+  collectors: d.collectors.map((c) => ({ _id: c.id, name: c.name })),
 })));
 await Period.insertMany(PERIODS.map((p) => ({ _id: p.id, lottery: p.lottery, drawDate: p.drawDate })));
 await Bill.insertMany(BILLS.map((b) => ({
-  _id: b.id, no: b.no, collectorId: b.collectorId, customerId: b.customerId, lottery: b.lottery, periodId: b.periodId,
+  _id: b.id, no: b.no, collectorId: b.collectorId, sheet: b.sheet, lottery: b.lottery, periodId: b.periodId,
   amount: b.amount, lines: b.lines, outstanding: b.outstanding, createdAt: new Date(b.createdAt),
 })));
-await Payment.insertMany(PAYMENTS.map((p) => ({ ...p, _id: p.id, at: new Date(p.at), customerId: p.customerId ?? null, recorded: false })));
+await Payment.insertMany(PAYMENTS.map((p) => ({ ...p, _id: p.id, at: new Date(p.at), recorded: false })));
 await Activity.insertMany(ACTIVITIES.map((a) => ({ ...a, _id: a.id, at: new Date(a.at) })));
 await PrizeResultModel.insertMany(PRIZE_RESULTS.map((r) => ({ ...r, announcedAt: new Date(r.announcedAt) })));
 // เลขบิล/รหัสลูกค้าถัดไปต่อจากข้อมูลตัวอย่าง
-await Counter.insertMany([{ _id: "bill", seq: BILLS.length }, { _id: "customer", seq: DEALERS.flatMap((d) => d.collectors.flatMap((c) => c.customers)).length }]);
+await Counter.insertMany([{ _id: "bill", seq: BILLS.length }]);
 
 console.log(`ใส่ข้อมูลแล้ว: เจ้ามือ ${DEALERS.length}, งวด ${PERIODS.length}, บิล ${BILLS.length}, รับ–จ่าย ${PAYMENTS.length}, ผลรางวัล ${PRIZE_RESULTS.length}`);
 await mongoose.disconnect();

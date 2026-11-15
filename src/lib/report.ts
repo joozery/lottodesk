@@ -48,30 +48,25 @@ export function dealerRows(dealers: readonly Dealer[], bills: readonly Bill[], m
 export interface DebtorRow {
   key: string;
   collectorId: string;
-  customerId: string | null;
   name: string;
-  code: string | null;
   collector: string;
   dealer: string;
   billCount: number;
   amount: number;
 }
 
-/** ลูกหนี้ค้างชำระ รวมตามลูกค้า (โพยตัวเองของผู้รวบรวมนับเป็นรายการของผู้รวบรวม) */
+/** ลูกหนี้ค้างชำระ รวมตามลูกค้าหลัก */
 export function debtorRows(dealers: readonly Dealer[], bills: readonly Bill[]): DebtorRow[] {
   const rows = new Map<string, DebtorRow>();
   for (const b of bills) {
     if (b.outstanding <= 0) continue;
     const dealer = dealers.find((d) => d.collectors.some((c) => c.id === b.collectorId));
     const collector = dealer?.collectors.find((c) => c.id === b.collectorId);
-    const customer = collector?.customers.find((c) => c.id === b.customerId);
-    const key = b.customerId ?? `own:${b.collectorId}`;
+    const key = b.collectorId;
     const row = rows.get(key) ?? {
       key,
       collectorId: b.collectorId,
-      customerId: b.customerId,
-      name: customer?.name ?? `${collector?.name ?? "-"} (โพยตัวเอง)`,
-      code: customer?.code ?? null,
+      name: collector?.name ?? "-",
       collector: collector?.name ?? "-",
       dealer: dealer?.name ?? "-",
       billCount: 0,

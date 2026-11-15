@@ -5,8 +5,7 @@ import { formatBaht } from "@/lib/format";
 export function GroupSummary({ summary }: { summary: Summary | null }) {
   const items = summary && [
     { label: "ยอดซื้อรวมกลุ่ม", value: summary.total.purchase, big: true },
-    { label: "โพยตัวเอง", value: summary.own.purchase },
-    { label: "โพยลูกค้าย่อย", value: summary.customers.purchase },
+    { label: "ยอดซื้อของลูกค้าหลัก", value: summary.total.purchase },
   ];
   return (
     <section aria-label="ยอดรวมกลุ่ม" className="rounded-xl bg-navy px-5 py-4 text-white">

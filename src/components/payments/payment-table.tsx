@@ -18,8 +18,7 @@ type View = "all" | "in" | "out";
 function resolveNames(p: Payment, dealers: Dealer[]) {
   const dealer = dealers.find((d) => d.collectors.some((c) => c.id === p.collectorId));
   const collector = dealer?.collectors.find((c) => c.id === p.collectorId);
-  const customer = collector?.customers.find((c) => c.id === p.customerId);
-  return { dealer: dealer?.name ?? "-", collector: collector?.name ?? "-", customer: customer?.name ?? null };
+  return { dealer: dealer?.name ?? "-", collector: collector?.name ?? "-" };
 }
 
 const DirectionBadge = ({ p }: { p: Payment }) =>
@@ -38,9 +37,9 @@ export function PaymentTable({ payments, dealers }: { payments: Payment[] | null
   const rows = payments && dealers ? payments.map((p) => ({ p, ...resolveNames(p, dealers) })) : null;
   const q = query.trim().toLowerCase();
   const visible = rows?.filter(
-    ({ p, collector, customer }) =>
+    ({ p, collector }) =>
       (view === "all" || p.direction === view) &&
-      (!q || p.note.toLowerCase().includes(q) || collector.toLowerCase().includes(q) || (customer ?? "").toLowerCase().includes(q)),
+      (!q || p.note.toLowerCase().includes(q) || collector.toLowerCase().includes(q)),
   );
   const count = (v: View) => rows?.filter(({ p }) => v === "all" || p.direction === v).length ?? 0;
   const net = visible?.reduce((s, { p }) => s + (p.direction === "in" ? p.amount : -p.amount), 0) ?? 0;
@@ -93,13 +92,12 @@ export function PaymentTable({ payments, dealers }: { payments: Payment[] | null
                 </tr>
               </thead>
               <tbody>
-                {visible.map(({ p, dealer, collector, customer }) => (
+                {visible.map(({ p, dealer, collector }) => (
                   <tr key={p.id} className="border-b border-slate-100">
                     <td className="whitespace-nowrap py-2.5 pr-3 text-slate-600">{formatDateTime(p.at)}</td>
                     <td className="py-2.5 pr-3">
                       <p className="text-slate-900">{p.note}</p>
                       <p className="flex items-center gap-1.5 text-xs text-slate-500">
-                        {customer && <span>ลูกค้า {customer}</span>}
                         {p.recorded && <Badge tone="blue" className="px-1.5 py-0 text-[11px]">บันทึกเอง</Badge>}
                       </p>
                     </td>
@@ -120,12 +118,12 @@ export function PaymentTable({ payments, dealers }: { payments: Payment[] | null
           </div>
 
           <ul className="flex flex-col gap-3 md:hidden">
-            {visible.map(({ p, collector, customer }) => (
+            {visible.map(({ p, collector }) => (
               <li key={p.id} className="rounded-xl border border-slate-200 p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm text-slate-900">{p.note}</p>
-                    <p className="text-xs text-slate-500">{formatDateTime(p.at)} · {customer ?? collector}</p>
+                    <p className="text-xs text-slate-500">{formatDateTime(p.at)} · {collector}</p>
                   </div>
                   <DirectionBadge p={p} />
                 </div>

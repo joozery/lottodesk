@@ -1,4 +1,4 @@
-import type { Bill, Collector, Dealer, Period } from "./types";
+import type { Bill, Dealer, Period } from "./types";
 
 export type PeriodMap = ReadonlyMap<string, Period>;
 
@@ -53,37 +53,13 @@ export function addTotals(a: Totals, b: Totals): Totals {
 }
 
 export interface GroupSummary {
-  own: Totals;
-  customers: Totals;
-  /** own + customers — คำนวณจากสองส่วนที่แยกขาดกัน จึงไม่นับซ้ำ */
   total: Totals;
 }
 
 export function groupSummary(collectorId: string, bills: readonly Bill[], periods: PeriodMap): GroupSummary {
   const mine = bills.filter((b) => b.collectorId === collectorId);
-  const own = summarize(mine.filter((b) => b.customerId === null), periods);
-  const customers = summarize(mine.filter((b) => b.customerId !== null), periods);
-  return { own, customers, total: addTotals(own, customers) };
+  return { total: summarize(mine, periods) };
 }
-
-export interface CustomerRow {
-  id: string;
-  code: string;
-  name: string;
-  totals: Totals;
-}
-
-export function customerRows(collector: Collector, bills: readonly Bill[], periods: PeriodMap): CustomerRow[] {
-  return collector.customers.map((c) => ({
-    id: c.id,
-    code: c.code,
-    name: c.name,
-    totals: summarize(bills.filter((b) => b.customerId === c.id), periods),
-  }));
-}
-
-export const sumRows = (rows: readonly CustomerRow[]) =>
-  rows.reduce((acc, r) => addTotals(acc, r.totals), EMPTY_TOTALS);
 
 export function collectorPurchase(collectorId: string, bills: readonly Bill[]) {
   return bills.reduce((s, b) => (b.collectorId === collectorId ? s + b.amount : s), 0);

@@ -1,20 +1,16 @@
 import { Bill } from "../models";
 import { HttpError } from "../middleware/http";
 
-/** ยอดค้างชำระของลูกค้าแต่ละราย รวมทุกงวด */
-export async function outstandingByCustomer(): Promise<Record<string, number>> {
+/** ยอดค้างชำระของลูกค้าหลักแต่ละราย รวมทุกงวด */
+export async function outstandingByCollector(): Promise<Record<string, number>> {
   const rows = await Bill.aggregate<{ _id: string; total: number }>([
-    { $match: { customerId: { $ne: null }, outstanding: { $gt: 0 } } },
-    { $group: { _id: "$customerId", total: { $sum: "$outstanding" } } },
+    { $match: { outstanding: { $gt: 0 } } },
+    { $group: { _id: "$collectorId", total: { $sum: "$outstanding" } } },
   ]);
   return Object.fromEntries(rows.map((r) => [r._id, r.total]));
 }
 
 /** ตัดยอดค้างของลูกค้า โดยตัดบิลเก่าสุดก่อน (FIFO) — ตัดเกินยอดค้างไม่ได้ */
-export async function applyReceipt(customerId: string, amount: number): Promise<void> {
-  await applyReceiptToBills({ customerId }, amount);
-}
-
 /** รับเงินในระดับผู้รวบรวม/ลูกค้าหลัก แล้วตัดบิลค้างตามลำดับเก่าไปใหม่ */
 export async function applyReceiptByCollector(collectorId: string, amount: number): Promise<void> {
   await applyReceiptToBills({ collectorId }, amount);
@@ -28,7 +24,7 @@ export async function applyReceiptByBill(billId: string, amount: number, collect
   await Bill.updateOne({ _id: billId }, { $set: { outstanding: remaining } });
 }
 
-async function applyReceiptToBills(filter: { customerId?: string; collectorId?: string }, amount: number): Promise<void> {
+async function applyReceiptToBills(filter: { collectorId?: string }, amount: number): Promise<void> {
   const owed = await Bill.find({ ...filter, outstanding: { $gt: 0 } }).sort({ createdAt: 1 }).select("outstanding").lean();
   const total = owed.reduce((s, b) => s + b.outstanding, 0);
   if (amount > total) throw new HttpError(400, `จำนวนเงินเกินยอดค้างชำระ (ค้าง ${total})`);

@@ -13,7 +13,6 @@ export const pubDealer = (d: Doc): Dealer => ({
   collectors: (d.collectors ?? []).map((c: Doc) => ({
     id: c._id,
     name: c.name,
-    customers: (c.customers ?? []).map((u: Doc) => ({ id: u._id, code: u.code, name: u.name, discountPercent: u.discountPercent ?? 0 })),
   })),
 });
 
@@ -22,7 +21,7 @@ export const pubBill = (d: Doc): Omit<Bill, "prize"> => ({
   id: d._id,
   no: d.no,
   collectorId: d.collectorId,
-  customerId: d.customerId ?? null,
+  sheet: d.sheet ?? 1,
   lottery: d.lottery,
   periodId: d.periodId,
   amount: d.amount,
@@ -49,7 +48,6 @@ export const pubPayment = (d: Doc): Payment => ({
   direction: d.direction,
   amount: d.amount,
   note: d.note ?? "",
-  customerId: d.customerId ?? null,
   billId: d.billId ?? null,
   recorded: d.recorded,
 });

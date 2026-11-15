@@ -27,7 +27,7 @@ export function filterDealers(dealers: Dealer[], query: string): Dealer[] {
   const has = (s: string) => s.toLowerCase().includes(q);
   return dealers.flatMap((d) => {
     if (has(d.name)) return [d];
-    const collectors = d.collectors.filter((c) => has(c.name) || c.customers.some((cu) => has(cu.name) || has(cu.code)));
+    const collectors = d.collectors.filter((c) => has(c.name));
     return collectors.length ? [{ ...d, collectors }] : [];
   });
 }

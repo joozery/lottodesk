@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FocusEvent, type FormEvent, type KeyboardEvent, type RefObject } from "react";
 import Link from "next/link";
-import { ArrowLeftRight, Keyboard, Layers3, Pencil, Plus, Printer, Search, Trash2, Upload } from "@/components/icons";
+import { ArrowLeftRight, Keyboard, Pencil, Plus, Printer, Trash2, Upload } from "@/components/icons";
 import { LotteryFilter } from "@/components/dealers/lottery-filter";
 import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/ui/button";
@@ -13,21 +13,26 @@ import { ErrorState } from "@/components/ui/state-panels";
 import { useRemote } from "@/hooks/use-remote";
 import { DEFAULT_DISCOUNT_CONFIG, discountForLinesAtAggregate, normalizeDiscounts } from "@/lib/discount";
 import { formatDate, formatNumber } from "@/lib/format";
-import { BET_LABEL } from "@/lib/prize-calc";
 import type { BetLine, Lottery, Period } from "@/lib/types";
 import { fetchDiscountTier } from "@/services/risk-service";
-import { createBill, createCollector, createCustomer, fetchDealers, fetchLedger, fetchPeriods } from "@/services/dealers-service";
+import { autoSaveBill, createCollector, fetchDealers, fetchLedger, fetchPeriods } from "@/services/dealers-service";
 
 type EntryType = "2" | "3" | "run";
 type EntryRow = { id: string; number: string; type: EntryType; top: number; tod: number; bottom: number };
 type SheetMap = Record<string, EntryRow[]>;
+const EMPTY_ROWS: EntryRow[] = [];
 
 const STORAGE_KEY = "lottodesk.entry-sheets.v1";
 const initialSheets: SheetMap = {};
 const money = (n: number) => `฿${formatNumber(n)}`;
 const rowTotal = (row: EntryRow) => row.top + row.tod + row.bottom;
-const sheetKey = (lottery: Lottery, periodId: string, dealerId: string, collectorId: string, customerId: string, sheet: number) =>
-  [lottery, periodId, dealerId, collectorId, customerId, sheet].join("|");
+const numberTone = (type: EntryType) => type === "run" ? "text-emerald-700" : type === "2" ? "text-amber-700" : "text-blue-700";
+const numberRowTone = (type: EntryType) => type === "run" ? "bg-emerald-50 hover:bg-emerald-100" : type === "2" ? "bg-amber-50 hover:bg-amber-100" : "bg-blue-50 hover:bg-blue-100";
+function entryId(prefix: string, suffix = "") {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}${suffix ? `-${suffix}` : ""}`;
+}
+const sheetKey = (lottery: Lottery, periodId: string, dealerId: string, collectorId: string, sheet: number) =>
+  [lottery, periodId, dealerId, collectorId, sheet].join("|");
 
 function uniquePermutations(value: string) {
   const result = new Set<string>();
@@ -53,6 +58,30 @@ function amountsFor(rows: EntryRow[]) {
     bottom: totals.bottom + row.bottom,
     total: totals.total + rowTotal(row),
   }), { top: 0, tod: 0, bottom: 0, total: 0 });
+}
+
+function rowsFromBill(lines: BetLine[]): EntryRow[] {
+  const rows = new Map<string, EntryRow>();
+  for (const line of lines) {
+    const type: EntryType = line.type.startsWith("run") ? "run" : line.type.endsWith("3") ? "3" : "2";
+    const row = rows.get(`${type}:${line.number}`) ?? { id: `bill-${line.number}-${type}`, number: line.number, type, top: 0, tod: 0, bottom: 0 };
+    if (line.type === "top3" || line.type === "top2" || line.type === "runTop") row.top += line.amount;
+    if (line.type === "tod3") row.tod += line.amount;
+    if (line.type === "bottom3" || line.type === "bottom2" || line.type === "runBottom") row.bottom += line.amount;
+    rows.set(`${type}:${line.number}`, row);
+  }
+  return [...rows.values()];
+}
+
+function linesOfRows(sheetRows: EntryRow[]): BetLine[] {
+  const types = { "2": { top: "top2", bottom: "bottom2" }, "3": { top: "top3", tod: "tod3", bottom: "bottom3" }, run: { top: "runTop", bottom: "runBottom" } } as const;
+  return sheetRows.flatMap((row) => {
+    const map: Partial<Record<"top" | "tod" | "bottom", BetLine["type"]>> = types[row.type];
+    return (["top", "tod", "bottom"] as const).flatMap((field) => {
+      const type = map[field];
+      return type && row[field] > 0 ? [{ type, number: row.number, amount: row[field] }] : [];
+    });
+  });
 }
 
 function localDate() {
@@ -165,9 +194,7 @@ export function EntryPage() {
   const [periodChoice, setPeriodChoice] = useState<string | null>(null);
   const [, setDealerChoice] = useState("");
   const [collectorChoice, setCollectorChoice] = useState("");
-  const [customerChoice, setCustomerChoice] = useState("");
   const [sheet, setSheet] = useState(1);
-  const [search, setSearch] = useState("");
   const [autoText, setAutoText] = useState("");
   const [entryType, setEntryType] = useState<EntryType>("3");
   const [number, setNumber] = useState("");
@@ -178,19 +205,17 @@ export function EntryPage() {
   const [lockAmount, setLockAmount] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
-  const [newCustomer, setNewCustomer] = useState("");
-  const [addingCustomer, setAddingCustomer] = useState(false);
   const [newCollector, setNewCollector] = useState("");
   const [addingCollector, setAddingCollector] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [paidInput, setPaidInput] = useState("");
   const [sheets, setSheets] = useState<SheetMap>(initialSheets);
-  const [savedSheets, setSavedSheets] = useState<SheetMap>(initialSheets);
+  const [, setAutoSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const numberRef = useRef<HTMLInputElement>(null);
   const topRef = useRef<HTMLInputElement>(null);
   const todRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLInputElement>(null);
+  const autoSaveTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -202,7 +227,6 @@ export function EntryPage() {
           const parsed = JSON.parse(stored) as SheetMap;
           if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
             setSheets(parsed);
-            setSavedSheets(parsed);
           }
         }
       } catch {
@@ -216,16 +240,14 @@ export function EntryPage() {
   const selectedCollector = collectorChoice ? collectorOptions.find((item) => item.collector.id === collectorChoice) : undefined;
   const dealer = selectedCollector?.dealer ?? dealers[0];
   const collector = selectedCollector?.collector ?? dealer?.collectors[0];
-  const customers = collector?.customers ?? [];
-  const customer = customerChoice ? customers.find((c) => c.id === customerChoice) : customers[0];
   const periodOptions = periods.filter((p) => p.lottery === lottery).sort((a, b) => b.drawDate.localeCompare(a.drawDate));
   const period = periodOptions.find((p) => p.id === periodChoice) ?? preferredPeriod(periods, lottery);
   // โหลดบิลของงวดพร้อมกับรายการงวดเลย (ไม่รอ) — "open" ให้เซิร์ฟเวอร์เลือกงวดที่เปิดรับอยู่ให้ตรงกับ preferredPeriod
-  const ledgerRemote = useRemote(`entry-ledger-${nonce}-${lottery}-${periodChoice ?? "open"}`, () => fetchLedger({ lottery, periodId: periodChoice ?? "open", from: "", to: "" }));
+  const ledgerRemote = useRemote(`entry-ledger-${nonce}-${lottery}-${period?.id ?? "open"}`, () => fetchLedger({ lottery, periodId: period?.id ?? "open", from: "", to: "" }));
   const open = Boolean(period);
-  const prefix = [lottery, period?.id ?? "", dealer?.id ?? "", collector?.id ?? "", customer?.id ?? ""].join("|");
-  const key = sheetKey(lottery, period?.id ?? "", dealer?.id ?? "", collector?.id ?? "", customer?.id ?? "", sheet);
-  const rows = sheets[key] ?? [];
+  const prefix = [lottery, period?.id ?? "", dealer?.id ?? "", collector?.id ?? ""].join("|");
+  const key = sheetKey(lottery, period?.id ?? "", dealer?.id ?? "", collector?.id ?? "", sheet);
+  const rows = sheets[key] ?? EMPTY_ROWS;
   const totals = amountsFor(rows);
   const allRows = Object.entries(sheets).filter(([k]) => k.startsWith(`${prefix}|`)).flatMap(([, value]) => value);
   const allTotals = amountsFor(allRows);
@@ -236,29 +258,30 @@ export function EntryPage() {
   const discountConfig = normalizeDiscounts(discountTier ?? DEFAULT_DISCOUNT_CONFIG);
   const collectorBills = (ledgerRemote.data?.bills ?? []).filter((bill) => bill.collectorId === collector?.id && bill.periodId === period?.id);
   const collectorExistingLines = collectorBills.flatMap((bill) => bill.lines);
-  const collectorAggregateLines = [...collectorExistingLines, ...linesOf(collectorDraftRows)];
-  const discountAmount = discountForLinesAtAggregate(linesOf(rows), collectorAggregateLines, discountConfig);
+  const collectorAggregateLines = [...collectorExistingLines, ...linesOfRows(collectorDraftRows)];
+  const discountAmount = discountForLinesAtAggregate(linesOfRows(rows), collectorAggregateLines, discountConfig);
   const discountPercent = totals.total > 0 ? (discountAmount / totals.total) * 100 : 0;
   const netAmount = Math.round((totals.total - discountAmount) * 100) / 100;
   const paidAmount = Number(paidInput || 0);
   const remainingAmount = Math.round((netAmount - paidAmount) * 100) / 100;
-  const submitBlockedReason = !rows.length
-    ? "กรุณาเพิ่มรายการเลขก่อนบันทึกบิล"
-    : !open
-      ? `งวดนี้ปิดรับแล้ว (วันที่ ${period?.drawDate ?? "ไม่พบงวด"}${period?.status === "confirmed" ? ", ยืนยันผลแล้ว" : ""})`
-      : !customer
-        ? "กรุณาเลือกลูกค้าก่อนบันทึกบิล"
-        : ledgerRemote.loading
-          ? "กำลังโหลดข้อมูลบิลเดิม กรุณารอสักครู่"
-          : !Number.isFinite(netAmount)
-            ? "ยอดสุทธิไม่ถูกต้อง"
-            : remainingAmount < 0
-              ? "ยอดรับมากกว่ายอดสุทธิ"
-              : null;
-  const customerBills = (ledgerRemote.data?.bills ?? []).filter((bill) => bill.customerId === customer?.id);
+  const customerBills = collectorBills;
   const customerBilled = customerBills.reduce((sum, bill) => sum + bill.amount, 0);
   const customerOwed = customerBills.reduce((sum, bill) => sum + bill.outstanding, 0);
   const customerReceived = customerBilled - customerOwed;
+
+  useEffect(() => {
+    const bill = collectorBills.find((item) => item.sheet === sheet);
+    if (!bill) return;
+    const restoredRows = rowsFromBill(bill.lines);
+    queueMicrotask(() => {
+      setSheets((current) => {
+        const currentRows = current[key] ?? EMPTY_ROWS;
+        return JSON.stringify(currentRows) === JSON.stringify(restoredRows) ? current : { ...current, [key]: restoredRows };
+      });
+      setPaidInput(String(Math.max(0, bill.amount - bill.outstanding)));
+    });
+  }, [collectorBills, key, sheet]);
+
   const limitedNumbers = period?.limitedNumbers ?? [];
   const limitedSet = new Set(limitedNumbers);
   const closedSet = new Set(period?.closedNumbers ?? []);
@@ -269,9 +292,8 @@ export function EntryPage() {
   for (const row of allRows) draftByNumber.set(row.number, (draftByNumber.get(row.number) ?? 0) + rowTotal(row));
   const exceededNumbers = new Set([...draftByNumber.keys()].filter((value) => limitedAmounts[value] !== undefined && (purchasedByNumber.get(value) ?? 0) + (draftByNumber.get(value) ?? 0) > limitedAmounts[value]));
   const excessByNumber = (value: string) => Math.max(0, Math.round(((purchasedByNumber.get(value) ?? 0) + (draftByNumber.get(value) ?? 0) - (limitedAmounts[value] ?? 0)) * 100) / 100);
-  const sheetNumbers = Array.from(new Set([1, 2, 3, ...Object.keys(sheets).filter((k) => k.startsWith(`${prefix}|`)).map((k) => Number(k.split("|").at(-1)))]))
+  const sheetNumbers = Array.from(new Set([1, 2, 3, sheet, ...collectorBills.map((bill) => bill.sheet), ...Object.keys(sheets).filter((k) => k.startsWith(`${prefix}|`)).map((k) => Number(k.split("|").at(-1)))]))
     .filter((n) => Number.isInteger(n) && n > 0).sort((a, b) => a - b);
-  const dirty = JSON.stringify(sheets) !== JSON.stringify(savedSheets);
 
   if (!dealersRemote.loading && !periodsRemote.loading && !dealersRemote.error && !periodsRemote.error && (!dealer || !period)) {
     return (
@@ -288,15 +310,23 @@ export function EntryPage() {
     );
   }
 
-  function chooseCustomer(id: string) {
-    setCustomerChoice(id);
-    setSheet(1);
-    setPaidInput("");
-  }
-
   function updateRows(next: EntryRow[]) {
     setSheets((current) => ({ ...current, [key]: next }));
     setNotice("");
+    if (!collector || !period || !next.length || !linesOfRows(next).length) return;
+    if (autoSaveTimerRef.current !== null) window.clearTimeout(autoSaveTimerRef.current);
+    const nextSheets = { ...sheets, [key]: next };
+    void nextSheets;
+    autoSaveTimerRef.current = window.setTimeout(() => {
+      setAutoSaving(true);
+      void autoSaveBill({ collectorId: collector.id, periodId: period.id, sheet, lines: linesOfRows(next), discountPercent, paidAmount })
+        .then(() => {
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...sheets, [key]: next })); } catch { /* backend เป็นข้อมูลหลัก */ }
+          setNotice(`แผ่นที่ ${sheet} บันทึกอัตโนมัติแล้ว`);
+        })
+        .catch((error) => setNotice(error instanceof Error ? error.message : "บันทึกอัตโนมัติไม่สำเร็จ"))
+        .finally(() => setAutoSaving(false));
+    }, 500);
   }
 
   function applyAutoEntry() {
@@ -305,7 +335,7 @@ export function EntryPage() {
     if (!parsed.rows.length) { setNotice("ยังอ่านรายการไม่ออก ลองใช้รูปแบบ เช่น บน แล้วพิมพ์ 7350 หรือ 524 30x30"); return; }
     const allowed = parsed.rows.filter((row) => !closedSet.has(row.number));
     const blocked = parsed.rows.length - allowed.length;
-    const next = allowed.map((row, index) => ({ ...row, id: `auto-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}` }));
+    const next = allowed.map((row, index) => ({ ...row, id: entryId("auto", String(index)) }));
     updateRows([...rows, ...next]);
     setAutoText("");
     const notes = [
@@ -338,11 +368,11 @@ export function EntryPage() {
     if (Object.values(amounts).some((n) => !Number.isFinite(n) || n < 0) || Object.values(amounts).every((n) => n === 0)) {
       setNotice("กรุณากรอกยอดเงินที่มากกว่า 0"); return;
     }
-    const nextRow: EntryRow = { id: editingId ?? `entry-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, number, type: entryType, ...amounts };
+    const nextRow: EntryRow = { id: editingId ?? entryId("entry"), number, type: entryType, ...amounts };
     const next = editingId ? rows.map((row) => row.id === editingId ? nextRow : row) : [...rows, nextRow];
     if (reverse && !editingId) {
       variants.slice(1).forEach((variant, index) => {
-        next.push({ ...nextRow, id: `entry-${Date.now()}-reverse-${index}`, number: variant });
+        next.push({ ...nextRow, id: entryId("entry", `reverse-${index}`), number: variant });
       });
     }
     updateRows(next);
@@ -361,24 +391,6 @@ export function EntryPage() {
     numberRef.current?.focus();
   }
 
-  async function addCustomer(event: FormEvent) {
-    event.preventDefault();
-    const name = newCustomer.trim();
-    if (!name || !dealer || !collector) return;
-    try {
-      const updated = await createCustomer(dealer.id, collector.id, name);
-      const created = updated.collectors.find((c) => c.id === collector.id)?.customers.at(-1);
-      setNonce((n) => n + 1);
-      if (created) setCustomerChoice(created.id);
-      setNewCustomer("");
-      setAddingCustomer(false);
-      setSheet(1);
-      setNotice(`เพิ่มลูกค้า ${name} แล้ว`);
-    } catch (e) {
-      setNotice(e instanceof Error ? e.message : "เพิ่มลูกค้าไม่สำเร็จ");
-    }
-  }
-
   async function addCollector(event: FormEvent) {
     event.preventDefault();
     const name = newCollector.trim();
@@ -386,59 +398,13 @@ export function EntryPage() {
     try {
       const updated = await createCollector(dealer.id, name);
       const created = updated.collectors.at(-1);
-      if (created) { setCollectorChoice(created.id); setCustomerChoice(""); setPaidInput(""); setSheet(1); }
+      if (created) { setCollectorChoice(created.id); setPaidInput(""); setSheet(1); }
       setNewCollector("");
       setAddingCollector(false);
       setNonce((n) => n + 1);
-      setNotice(`เพิ่มลูกค้าหลัก ${name} แล้ว เพิ่มลูกค้าย่อยเพื่อเริ่มคีย์บิล`);
+      setNotice(`เพิ่มลูกค้าหลัก ${name} แล้ว`);
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "เพิ่มลูกค้าหลักไม่สำเร็จ");
-    }
-  }
-
-  /** แปลงแผ่นโพยเป็นรายการแทง: 2 ตัว = บน/ล่าง, 3 ตัว = บน/โต๊ด/ล่าง, วิ่ง = บน/ล่าง */
-  function linesOf(sheetRows: EntryRow[]): BetLine[] {
-    const types = { "2": { top: "top2", bottom: "bottom2" }, "3": { top: "top3", tod: "tod3", bottom: "bottom3" }, run: { top: "runTop", bottom: "runBottom" } } as const;
-    return sheetRows.flatMap((row) => {
-      const map: Partial<Record<"top" | "tod" | "bottom", BetLine["type"]>> = types[row.type];
-      return (["top", "tod", "bottom"] as const).flatMap((field) => {
-        const type = map[field];
-        return type && row[field] > 0 ? [{ type, number: row.number, amount: row[field] }] : [];
-      });
-    });
-  }
-
-  async function submitBill() {
-    if (!collector || !period || !rows.length) return;
-    const closedLine = linesOf(rows).find((line) => closedSet.has(line.number));
-    if (closedLine) { setNotice(`เลข ${closedLine.number} ปิดรับในงวดนี้ ไม่สามารถซื้อได้`); return; }
-    if (!Number.isFinite(discountPercent) || discountPercent < 0 || discountPercent > 100) { setNotice("ส่วนลดต้องอยู่ระหว่าง 0–100%"); return; }
-    if (!Number.isFinite(paidAmount) || paidAmount < 0 || paidAmount > netAmount) { setNotice("ยอดที่จ่ายต้องไม่เกินยอดสุทธิของบิล"); return; }
-    setSubmitting(true);
-    try {
-      const bill = await createBill({ collectorId: collector.id, customerId: customer?.id ?? null, periodId: period.id, lines: linesOf(rows), discountPercent, paidAmount });
-      const next = { ...sheets, [key]: [] };
-      setSheets(next);
-      setPaidInput("");
-      setNonce((n) => n + 1);
-      // ล้างแผ่นที่ส่งแล้ว ทั้งในหน้าจอและที่บันทึกร่างไว้ในเบราว์เซอร์
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); setSavedSheets(next); } catch { /* ร่างในเบราว์เซอร์ไม่สำคัญเท่าบิลที่ส่งสำเร็จแล้ว */ }
-      const warn = (bill.warnings ?? []).map((w) => `${w.number} ${BET_LABEL[w.type]} ซื้อรวม ${money(w.total)} เกินวงเงิน ${money(w.excess)}`);
-      setNotice(`บันทึกบิล ${bill.no} ยอดสุทธิ ${money(bill.amount)} · รับแล้ว ${money(paidAmount)} · ค้าง ${money(bill.outstanding)}${warn.length ? ` ⚠ เกินวงเงิน: ${warn.join(", ")} (ไปที่หน้า ยอดซื้อ/ตีออก)` : ""}`);
-    } catch (e) {
-      setNotice(e instanceof Error ? e.message : "ส่งบิลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  function saveSheet() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sheets));
-      setSavedSheets(sheets);
-      setNotice(`บันทึกแผ่นที่ ${sheet} ในเบราว์เซอร์นี้แล้ว`);
-    } catch {
-      setNotice("บันทึกไม่สำเร็จ กรุณาตรวจพื้นที่จัดเก็บในเบราว์เซอร์");
     }
   }
 
@@ -514,48 +480,44 @@ export function EntryPage() {
           <>
             <div className="mb-3 grid grid-cols-1 items-end gap-2.5 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:grid-cols-2 lg:flex lg:flex-wrap lg:gap-3">
               {false && <label className="hidden min-w-0 flex-1 text-xs font-medium text-slate-500">เจ้ามือ
-                {dealers.length > 1 && <Select value={dealer.id} onValueChange={(id) => { setDealerChoice(id); const next = dealers.find((d) => d.id === id); setCollectorChoice(next?.collectors[0]?.id ?? ""); setCustomerChoice(next?.collectors[0]?.customers[0]?.id ?? ""); setSheet(1); setPaidInput(""); }}>
+                {dealers.length > 1 && <Select value={dealer.id} onValueChange={(id) => { setDealerChoice(id); const next = dealers.find((d) => d.id === id); setCollectorChoice(next?.collectors[0]?.id ?? ""); setSheet(1); setPaidInput(""); }}>
                   <SelectTrigger className="mt-1" aria-label="เจ้ามือ" />
                   <SelectContent>{dealers.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
                 </Select>}
               </label>}
-              <label className="min-w-0 flex-1 text-xs font-medium text-slate-500">ลูกค้าหลัก / ผู้ส่งโพย
-                <Select value={collector.id} onValueChange={(id) => { setCollectorChoice(id); setCustomerChoice(collectorOptions.find((item) => item.collector.id === id)?.collector.customers[0]?.id ?? ""); setSheet(1); setPaidInput(""); }}>
+              <label className="hidden min-w-0 flex-1 text-xs font-medium text-slate-500">ลูกค้าหลัก / ผู้ส่งโพย
+                <Select value={collector.id} onValueChange={(id) => { setCollectorChoice(id); setSheet(1); setPaidInput(""); }}>
                   <SelectTrigger className="mt-1" aria-label="ผู้ส่งโพย" />
                   <SelectContent>{collectorOptions.map(({ collector: c }) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                 </Select>
               </label>
-              <label className="min-w-0 flex-1 text-xs font-medium text-slate-500">ลูกค้าย่อย / เจ้าของบิล
-                <Select value={customer?.id ?? ""} onValueChange={chooseCustomer}>
-                  <SelectTrigger className="mt-1" aria-label="ลูกค้าย่อย" />
-                  <SelectContent>{customers.map((c) => <SelectItem key={c.id} value={c.id}>{c.code} · {c.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </label>
-              <label className="min-w-0 text-xs font-medium text-slate-500 lg:w-28">แผ่นที่
+              <label className="hidden min-w-0 text-xs font-medium text-slate-500 lg:w-28">แผ่นที่
                 <Select value={String(sheet)} onValueChange={(value) => setSheet(Number(value))}>
                   <SelectTrigger className="mt-1" aria-label="แผ่นที่" />
                   <SelectContent>{sheetNumbers.map((n) => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
                 </Select>
               </label>
+              <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto pb-1"><span className="shrink-0 text-xs font-medium text-slate-500">แผ่นที่</span>{sheetNumbers.map((n) => <button key={n} type="button" onClick={() => setSheet(n)} className={`size-8 shrink-0 rounded-lg border text-sm font-semibold ${n === sheet ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 text-slate-700 hover:border-blue-300"}`}>{n}</button>)}<button type="button" onClick={() => setSheet(Math.max(...sheetNumbers) + 1)} className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-blue-200 px-2 text-sm font-medium text-blue-600"><Plus className="size-3.5" /> เพิ่มแผ่น</button></div>
             </div>
 
-            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => { setAddingCollector((value) => !value); setAddingCustomer(false); }}><Plus className="size-4" /> เพิ่มลูกค้าหลัก</Button>
-              <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => { setAddingCustomer((value) => !value); setAddingCollector(false); }}><Plus className="size-4" /> เพิ่มลูกค้าย่อย</Button>
+            <div className="hidden mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+              <Button type="button" variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => setAddingCollector((value) => !value)}><Plus className="size-4" /> เพิ่มลูกค้าหลัก</Button>
               {addingCollector && <form onSubmit={(e) => { void addCollector(e); }} className="flex min-w-56 flex-1 gap-2"><Input value={newCollector} onChange={(e) => setNewCollector(e.target.value)} placeholder="ชื่อลูกค้าหลัก" aria-label="ชื่อลูกค้าหลักใหม่" /><Button type="submit" size="sm">บันทึก</Button></form>}
-              {addingCustomer && <form onSubmit={(e) => { void addCustomer(e); }} className="flex min-w-56 flex-1 gap-2"><Input value={newCustomer} onChange={(e) => setNewCustomer(e.target.value)} placeholder="ชื่อลูกค้าย่อย" aria-label="ชื่อลูกค้าย่อยใหม่" /><Button type="submit" size="sm">บันทึก</Button></form>}
             </div>
 
             <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-3 lg:grid-cols-[200px_minmax(0,1fr)] xl:grid-cols-[200px_minmax(0,1fr)_260px]">
               <aside className="min-w-0 space-y-3 max-lg:order-3">
                 <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                  <h2 className="mb-2 font-bold text-[#102356]">ลูกค้าย่อย</h2>
-                  <label className="relative block"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="รหัส / ชื่อลูกค้า" aria-label="ค้นหาลูกค้า" className="pl-9" /></label>
-                  <div className="mt-2 max-h-72 overflow-y-auto rounded-lg border border-slate-200">
-                    <div className="grid grid-cols-[70px_1fr] bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-500"><span>รหัส</span><span>ชื่อลูกค้า</span></div>
-                    {customers.filter((c) => `${c.code} ${c.name}`.toLowerCase().includes(search.toLowerCase())).map((c) => <button key={c.id} type="button" onClick={() => chooseCustomer(c.id)} className={`grid w-full grid-cols-[70px_1fr] border-t border-slate-100 px-3 py-1.5 text-left text-sm ${c.id === customer?.id ? "bg-blue-600 font-semibold text-white" : "text-slate-700 hover:bg-blue-50"}`}><span>{c.code}</span><span className="truncate">{c.name}</span></button>)}
+                  <h2 className="font-bold text-[#102356]">ลูกค้าหลัก</h2>
+                  <p className="mt-0.5 text-xs text-slate-500">เลือกลูกค้าที่ต้องการคีย์โพย</p>
+                  <div className="mt-2 max-h-[420px] space-y-1 overflow-y-auto pr-1">
+                    {collectorOptions.map(({ collector: c, dealer: d }) => <button key={c.id} type="button" onClick={() => { setCollectorChoice(c.id); setSheet(1); setPaidInput(""); }} className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition ${c.id === collector.id ? "border-blue-600 bg-blue-600 font-semibold text-white" : "border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-blue-50"}`}><span className="block truncate">{c.name}</span>{dealers.length > 1 && <span className={`block truncate text-[11px] ${c.id === collector.id ? "text-blue-100" : "text-slate-400"}`}>{d.name}</span>}</button>)}
                   </div>
+                  <Button type="button" variant="outline" size="sm" className="mt-3 w-full" onClick={() => setAddingCollector((value) => !value)}><Plus className="size-4" /> เพิ่มลูกค้าหลัก</Button>
+                  {addingCollector && <form onSubmit={(e) => { void addCollector(e); }} className="mt-2 flex gap-2"><Input value={newCollector} onChange={(e) => setNewCollector(e.target.value)} placeholder="ชื่อลูกค้าหลัก" aria-label="ชื่อลูกค้าหลักใหม่" /><Button type="submit" size="sm">บันทึก</Button></form>}
                 </section>
+              </aside>
+              <aside className="hidden min-w-0 space-y-3 max-lg:order-3">
                 <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
                   <h2 className="font-bold text-[#102356]">แผ่นโพย</h2><p className="mt-0.5 text-xs text-slate-500">ลูกค้าเดียวมีหลายแผ่นได้</p>
                   <div className="mt-2.5 flex flex-wrap gap-1.5">{sheetNumbers.map((n) => <button key={n} type="button" onClick={() => setSheet(n)} className={`size-8 rounded-lg border text-sm font-semibold ${n === sheet ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 text-slate-700 hover:border-blue-300"}`}>{n}</button>)}<button type="button" onClick={() => setSheet(Math.max(...sheetNumbers) + 1)} className="inline-flex h-8 items-center gap-1 rounded-lg border border-blue-200 px-2 text-sm font-medium text-blue-600"><Plus className="size-3.5" /> เพิ่มแผ่น</button></div>
@@ -570,7 +532,7 @@ export function EntryPage() {
                     <div className="mt-2 flex flex-col gap-2 sm:flex-row"><textarea value={autoText} onChange={(event) => setAutoText(event.target.value)} placeholder={'บน\n7350\nล่าง\n4350'} aria-label="ข้อความคีย์โพยอัตโนมัติ" className="min-h-20 min-w-0 flex-1 resize-y rounded-lg border border-blue-200 bg-white px-3 py-2 font-mono text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600" /><Button type="button" size="sm" onClick={applyAutoEntry} disabled={!open || !autoText.trim()} className="sm:self-end">แปลงลงตาราง</Button></div>
                   </div>
                   <form onSubmit={addEntry} onKeyDown={(e) => { if (handleShortcut(e.key)) e.preventDefault(); if (e.key === "Escape") { e.preventDefault(); clearEntry(); } }} className="grid grid-cols-2 items-end gap-2 sm:grid-cols-[minmax(80px,1.2fr)_repeat(3,minmax(65px,0.8fr))_auto]">
-                    <label className="text-xs font-medium text-slate-600">เลข<Input ref={numberRef} value={number} onChange={(e) => { const value = e.target.value.replace(/\D/g, "").slice(0, 3); setNumber(value); setEntryType(entryTypeForNumber(value)); }} onKeyDown={(e) => moveOnEnter(e, topRef)} maxLength={3} inputMode="numeric" autoComplete="off" className="mt-1 h-9 font-mono text-lg" aria-label="เลข" /></label>
+                    <label className="text-xs font-medium text-slate-600">เลข<Input ref={numberRef} value={number} onChange={(e) => { const value = e.target.value.replace(/\D/g, "").slice(0, 3); setNumber(value); setEntryType(entryTypeForNumber(value)); }} onKeyDown={(e) => moveOnEnter(e, topRef)} maxLength={3} inputMode="numeric" autoComplete="off" className={`mt-1 h-9 font-mono text-lg ${numberTone(entryType)}`} aria-label="เลข" /></label>
                     <label className="text-xs font-medium text-slate-600">บน<Input ref={topRef} value={top} onChange={(e) => setTop(e.target.value)} onFocus={selectAmountOnFocus} onKeyDown={(e) => moveOnEnter(e, entryType === "3" ? todRef : bottomRef)} type="number" min="0" inputMode="numeric" className="mt-1" aria-label="บน" /></label>
                     <label className="text-xs font-medium text-slate-600">โต๊ด<Input ref={todRef} value={tod} onChange={(e) => setTod(e.target.value)} onFocus={selectAmountOnFocus} onKeyDown={(e) => moveOnEnter(e, bottomRef)} type="number" min="0" inputMode="numeric" disabled={entryType !== "3"} className="mt-1" aria-label="โต๊ด" /></label>
                     <label className="text-xs font-medium text-slate-600">ล่าง<Input ref={bottomRef} value={bottom} onChange={(e) => setBottom(e.target.value)} onFocus={selectAmountOnFocus} type="number" min="0" inputMode="numeric" className="mt-1" aria-label="ล่าง" /></label>
@@ -582,13 +544,13 @@ export function EntryPage() {
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-2.5"><div className="flex items-center gap-2"><h2 className="text-base font-bold text-blue-700">แผ่นที่ {sheet}</h2><span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">{formatNumber(rows.length)} รายการ</span></div><div className="flex flex-wrap gap-2"><Button variant="outline" size="sm" onClick={() => updateRows(rows.map((row) => ({ ...row, number: row.number.split("").reverse().join("") })))} disabled={!rows.length || !open}><ArrowLeftRight className="size-4" /> กลับเลข</Button><input ref={fileRef} type="file" accept=".csv,.txt,text/csv,text/plain" className="hidden" onChange={(e) => void importFile(e.target.files?.[0])} /><Button variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={!open}><Upload className="size-4" /> นำเข้า</Button><Button variant="outline" size="sm" onClick={() => window.print()}><Printer className="size-4" /> พิมพ์บิล</Button></div></div>
                   <div className="max-h-[45vh] space-y-2 overflow-y-auto p-3 sm:hidden">
                     {rows.length === 0 && <p className="py-5 text-center text-sm text-slate-500">ยังไม่มีเลขในแผ่นนี้ เริ่มคีย์เลขด้านบน</p>}
-                    {rows.map((row, i) => <article key={row.id} className={`rounded-lg border p-3 ${exceededNumbers.has(row.number) ? "border-red-400 bg-red-50" : limitedSet.has(row.number) ? "border-amber-300 bg-amber-50" : "border-slate-200"}`}>
-                      <div className="flex items-start justify-between gap-2"><div><p className="text-xs text-slate-500">รายการ {i + 1} · {row.type === "run" ? "วิ่ง" : `${row.type} ตัว`}</p><p className="text-xl font-bold tracking-wider text-[#102356]">{row.number}{limitedSet.has(row.number) && <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 align-middle text-xs tracking-normal text-amber-900">เลขอั้น</span>}</p></div><p className="text-lg font-bold tabular-nums text-blue-700">{money(rowTotal(row))}</p></div>
+                    {rows.map((row, i) => <article key={row.id} className={`rounded-lg border p-3 ${exceededNumbers.has(row.number) ? "border-red-400 bg-red-50" : limitedSet.has(row.number) ? "border-amber-300 bg-amber-50" : `border-slate-200 ${numberRowTone(row.type)}`}`}>
+                      <div className="flex items-start justify-between gap-2"><div><p className="text-xs text-slate-500">รายการ {i + 1} · {row.type === "run" ? "วิ่ง" : `${row.type} ตัว`}</p><p className={`text-xl font-bold tracking-wider ${numberTone(row.type)}`}>{row.number}{limitedSet.has(row.number) && <span className="ml-2 rounded bg-amber-200 px-1.5 py-0.5 align-middle text-xs tracking-normal text-amber-900">เลขอั้น</span>}</p></div><p className="text-lg font-bold tabular-nums text-blue-700">{money(rowTotal(row))}</p></div>
                       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">{row.top > 0 && <span>บน {money(row.top)}</span>}{row.tod > 0 && <span>โต๊ด {money(row.tod)}</span>}{row.bottom > 0 && <span>ล่าง {money(row.bottom)}</span>}{exceededNumbers.has(row.number) && <span className="font-semibold text-red-700">เกินวงเงิน {money(excessByNumber(row.number))}</span>}</div>
                       <div className="mt-2 flex justify-end gap-2 border-t border-slate-200 pt-2"><Button type="button" variant="outline" size="sm" onClick={() => editRow(row)} aria-label={`แก้ไขเลข ${row.number}`}><Pencil className="size-4" /> แก้ไข</Button><Button type="button" variant="outline" size="sm" onClick={() => updateRows(rows.filter((item) => item.id !== row.id))} aria-label={`ลบเลข ${row.number}`}><Trash2 className="size-4" /> ลบ</Button></div>
                     </article>)}
                   </div>
-                  <div className="hidden max-h-[46vh] overflow-auto sm:block"><table className="w-full text-center text-sm"><thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-600"><tr><th className="px-1.5 py-1.5">ลำดับ</th><th className="px-1.5 py-1.5">เลข</th><th className="px-1.5 py-1.5">บน</th><th className="px-1.5 py-1.5">โต๊ด</th><th className="px-1.5 py-1.5">ล่าง</th><th className="px-1.5 py-1.5">รวม</th><th className="px-1.5 py-1.5">จัดการ</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row, i) => <tr key={row.id} className={limitedSet.has(row.number) ? "bg-amber-50" : "hover:bg-slate-50"}><td className="px-1.5 py-1.5 text-slate-500">{i + 1}</td><td className="px-1.5 py-1.5 text-[15px] font-bold text-[#102356]">{row.number}{limitedSet.has(row.number) && <span className="ml-1 rounded bg-amber-200 px-1 text-[10px] text-amber-900">อั้น</span>}</td><td className="px-1.5 py-1.5 tabular-nums">{row.top ? formatNumber(row.top) : "—"}</td><td className="px-1.5 py-1.5 tabular-nums">{row.tod ? formatNumber(row.tod) : "—"}</td><td className="px-1.5 py-1.5 tabular-nums">{row.bottom ? formatNumber(row.bottom) : "—"}</td><td className="px-1.5 py-1.5 font-bold tabular-nums text-blue-700">{formatNumber(rowTotal(row))}</td><td className="px-1 py-0.5"><div className="flex justify-center"><button type="button" aria-label={`แก้ไขเลข ${row.number}`} onClick={() => editRow(row)} className="rounded p-1.5 text-blue-600 hover:bg-blue-50 max-md:p-2.5"><Pencil className="size-4" /></button><button type="button" aria-label={`ลบเลข ${row.number}`} onClick={() => updateRows(rows.filter((item) => item.id !== row.id))} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 max-md:p-2.5"><Trash2 className="size-4" /></button></div></td></tr>)}<tr className="bg-blue-50/30"><td className="px-1.5 py-1.5 text-slate-500">{rows.length + 1}</td><td colSpan={6} className="px-1.5 py-1.5 text-left text-xs text-slate-400">เพิ่มรายการใหม่ในช่องคีย์ด้านบน</td></tr></tbody></table></div>
+                  <div className="hidden max-h-[46vh] overflow-auto sm:block"><table className="w-full text-center text-sm"><thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold text-slate-600"><tr><th className="px-1.5 py-1.5">ลำดับ</th><th className="px-1.5 py-1.5">เลข</th><th className="px-1.5 py-1.5">บน</th><th className="px-1.5 py-1.5">โต๊ด</th><th className="px-1.5 py-1.5">ล่าง</th><th className="px-1.5 py-1.5">รวม</th><th className="px-1.5 py-1.5">จัดการ</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((row, i) => <tr key={row.id} className={exceededNumbers.has(row.number) ? "bg-red-50" : limitedSet.has(row.number) ? "bg-amber-50" : numberRowTone(row.type)}><td className="px-1.5 py-1.5 text-slate-500">{i + 1}</td><td className={`px-1.5 py-1.5 text-[15px] font-bold ${numberTone(row.type)}`}>{row.number}{limitedSet.has(row.number) && <span className="ml-1 rounded bg-amber-200 px-1 text-[10px] text-amber-900">อั้น</span>}</td><td className="px-1.5 py-1.5 tabular-nums">{row.top ? formatNumber(row.top) : "—"}</td><td className="px-1.5 py-1.5 tabular-nums">{row.tod ? formatNumber(row.tod) : "—"}</td><td className="px-1.5 py-1.5 tabular-nums">{row.bottom ? formatNumber(row.bottom) : "—"}</td><td className="px-1.5 py-1.5 font-bold tabular-nums text-blue-700">{formatNumber(rowTotal(row))}</td><td className="px-1 py-0.5"><div className="flex justify-center"><button type="button" aria-label={`แก้ไขเลข ${row.number}`} onClick={() => editRow(row)} className="rounded p-1.5 text-blue-600 hover:bg-blue-50 max-md:p-2.5"><Pencil className="size-4" /></button><button type="button" aria-label={`ลบเลข ${row.number}`} onClick={() => updateRows(rows.filter((item) => item.id !== row.id))} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 max-md:p-2.5"><Trash2 className="size-4" /></button></div></td></tr>)}<tr className="bg-blue-50/30"><td className="px-1.5 py-1.5 text-slate-500">{rows.length + 1}</td><td colSpan={6} className="px-1.5 py-1.5 text-left text-xs text-slate-400">เพิ่มรายการใหม่ในช่องคีย์ด้านบน</td></tr></tbody></table></div>
                   <div className="grid gap-2 border-t border-slate-200 bg-slate-50 px-4 py-2 text-sm sm:grid-cols-[auto_1fr_1fr_1fr]"><span className="font-semibold">{formatNumber(rows.length)} รายการ</span><span>บน <strong className="ml-2 text-blue-700">{money(totals.top)}</strong></span><span>โต๊ด <strong className="ml-2 text-blue-700">{money(totals.tod)}</strong></span><span>ล่าง <strong className="ml-2 text-blue-700">{money(totals.bottom)}</strong></span></div>
                 </section>
 
@@ -602,14 +564,13 @@ export function EntryPage() {
                   </div>
                   <p className={`mt-3 text-sm font-semibold ${remainingAmount < 0 ? "text-red-700" : "text-orange-700"}`}>ยอดคงเหลือบิลนี้: {money(Number.isFinite(remainingAmount) ? remainingAmount : 0)}</p>
                 </section>
-                <div className="order-4 grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-end max-xl:sticky max-xl:bottom-[calc(4.25rem+env(safe-area-inset-bottom))] max-xl:z-20 max-xl:-mx-3 max-xl:border-t max-xl:border-slate-200 max-xl:bg-white/95 max-xl:px-3 max-xl:py-2 max-xl:backdrop-blur"><Button variant="outline" onClick={() => { setSheets(savedSheets); clearEntry(); setNotice("ยกเลิกการแก้ไขที่ยังไม่บันทึกแล้ว"); }} disabled={!dirty} className="min-w-0 sm:flex-1">ยกเลิก</Button><Button onClick={saveSheet} disabled={!dirty} className="min-w-0 sm:flex-[2]"><Layers3 className="size-4" /> เก็บร่าง <span className="hidden sm:inline">{money(totals.total)}</span></Button><Button onClick={() => void submitBill()} disabled={submitBlockedReason !== null || submitting || !Number.isFinite(paidAmount)} className="col-span-2 row-start-1 min-w-0 sm:flex-[2]">{submitting ? "กำลังบันทึก..." : "บันทึกบิลและยอดรับ"}</Button></div>
-                {submitBlockedReason && <p className="order-5 mt-2 text-right text-xs text-amber-700">ยังบันทึกไม่ได้: {submitBlockedReason}</p>}
+                <div className="order-4 flex items-center justify-end border-t border-slate-200 pt-2 text-xs text-slate-500">ระบบบันทึกแผ่นนี้อัตโนมัติเมื่อมีการแก้ไข</div>
                 {notice && <p role="status" className="order-6 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-800">{notice}</p>}
               </div>
 
               <aside className="min-w-0 space-y-3 max-lg:order-2 lg:col-start-2 xl:col-start-3 xl:row-start-1">
                 <section className="rounded-xl bg-gradient-to-br from-[#152b50] to-[#0a1832] p-3.5 text-white shadow-sm"><div className="flex items-center justify-between text-sm"><h2 className="font-semibold">ยอดแผ่นนี้</h2><span>{formatNumber(rows.length)} รายการ</span></div><p className="mt-2 text-3xl font-bold tabular-nums">{money(totals.total)}</p></section>
-                <section className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm"><h2 className="font-bold text-[#102356]">5. ลูกค้านี้ · ทุกบิลในงวด</h2><p className="mt-1 text-xs text-slate-500">{customer?.name} · {formatNumber(customerBills.length)} บิลที่บันทึกแล้ว</p><dl className="mt-3 space-y-2 text-sm"><div className="flex justify-between"><dt>ยอดบิลสุทธิ</dt><dd className="font-semibold tabular-nums">{money(customerBilled)}</dd></div><div className="flex justify-between text-emerald-700"><dt>รับแล้ว</dt><dd className="font-semibold tabular-nums">{money(customerReceived)}</dd></div><div className="flex justify-between border-t pt-2 text-orange-700"><dt>คงเหลือ</dt><dd className="font-bold tabular-nums">{money(customerOwed)}</dd></div></dl>{customerBills.length > 0 && <div className="mt-3 max-h-56 space-y-2 overflow-y-auto border-t pt-3">{customerBills.map((bill) => <div key={bill.id} className="rounded-lg bg-slate-50 p-2 text-xs"><div className="flex justify-between font-semibold"><span>{bill.no}</span><span>{money(bill.amount)}</span></div><div className="mt-1 flex justify-between text-slate-500"><span>รับ {money(bill.amount - bill.outstanding)}</span><span>ค้าง {money(bill.outstanding)}</span></div>{bill.prize > 0 && <p className="mt-1 text-emerald-700">รางวัลต้องจ่าย {money(bill.prize)}</p>}</div>)}</div>}</section>
+                <section className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm"><h2 className="font-bold text-[#102356]">5. {collector.name} · ทุกบิลในงวด</h2><p className="mt-1 text-xs text-slate-500">{formatNumber(customerBills.length)} บิลที่บันทึกแล้ว</p><dl className="mt-3 space-y-2 text-sm"><div className="flex justify-between"><dt>ยอดบิลสุทธิ</dt><dd className="font-semibold tabular-nums">{money(customerBilled)}</dd></div><div className="flex justify-between text-emerald-700"><dt>รับแล้ว</dt><dd className="font-semibold tabular-nums">{money(customerReceived)}</dd></div><div className="flex justify-between border-t pt-2 text-orange-700"><dt>คงเหลือ</dt><dd className="font-bold tabular-nums">{money(customerOwed)}</dd></div></dl>{customerBills.length > 0 && <div className="mt-3 max-h-56 space-y-2 overflow-y-auto border-t pt-3">{customerBills.map((bill) => <div key={bill.id} className="rounded-lg bg-slate-50 p-2 text-xs"><div className="flex justify-between font-semibold"><span>{bill.no}</span><span>{money(bill.amount)}</span></div><div className="mt-1 flex justify-between text-slate-500"><span>รับ {money(bill.amount - bill.outstanding)}</span><span>ค้าง {money(bill.outstanding)}</span></div>{bill.prize > 0 && <p className="mt-1 text-emerald-700">รางวัลต้องจ่าย {money(bill.prize)}</p>}</div>)}</div>}</section>
                 <section className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm"><h2 className="mb-2 font-bold text-[#102356]">สรุปยอด</h2><table className="w-full text-sm"><thead className="bg-slate-50 text-xs text-slate-600"><tr><th className="px-2 py-1.5 text-left">ประเภท</th><th className="px-2 py-1.5 text-right">แผ่นนี้</th><th className="px-2 py-1.5 text-right">ลูกค้านี้</th></tr></thead><tbody>{categories.map(([label, getAmount]) => { const here = rows.reduce((sum, row) => sum + getAmount(row), 0); const all = allRows.reduce((sum, row) => sum + getAmount(row), 0); return <tr key={label} className="border-b border-slate-100"><th className="px-2 py-1 text-left text-[13px] font-medium">{label}</th><td className={`px-2 py-1 text-right tabular-nums ${here ? "" : "text-slate-300"}`}>{formatNumber(here)}</td><td className={`px-2 py-1 text-right tabular-nums ${all ? "" : "text-slate-300"}`}>{formatNumber(all)}</td></tr>; })}</tbody><tfoot className="bg-blue-50 font-bold text-blue-700"><tr><td className="px-2 py-1.5">รวม</td><td className="px-2 py-1.5 text-right tabular-nums">{formatNumber(totals.total)}</td><td className="px-2 py-1.5 text-right tabular-nums">{formatNumber(allTotals.total)}</td></tr></tfoot></table></section>
                 <section className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-sm"><h2 className="flex items-center gap-2 font-bold text-[#102356]"><Keyboard className="size-4" /> คำสั่งลัด</h2><div className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">{[["F2", "หน้าคีย์โพย"], ["F4", "หน้ายอดซื้อ/ตีออก"], ["F8", "ล็อกยอดเงิน"], ["F9", "กลับเลข"]].map(([key, label]) => <div key={key} className="flex items-center gap-2"><kbd className="rounded border border-slate-200 bg-slate-50 px-2 py-1 font-mono">{key}</kbd><span className="text-slate-600">{label}</span></div>)}</div></section>
               </aside>

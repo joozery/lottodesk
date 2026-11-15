@@ -18,14 +18,20 @@ const line = z.object({
 
 const createBody = z.object({
   collectorId: z.string().min(1),
-  /** null = โพยตัวเองของผู้ส่งโพย */
-  customerId: z.string().min(1).nullable().default(null),
   periodId: z.string().min(1),
   lines: z.array(line).min(1, "ต้องมีอย่างน้อย 1 รายการ").max(500),
   /** true = รับเงินครบแล้วตอนคีย์ (ไม่มียอดค้าง) */
   paid: z.boolean().default(false),
   discountPercent: z.number().min(0).max(100).default(0),
   specialDiscountPercent: z.number().min(0).max(100).optional(),
+  paidAmount: z.number().min(0).max(100_000_000).default(0),
+});
+const autoBody = z.object({
+  collectorId: z.string().min(1),
+  periodId: z.string().min(1),
+  sheet: z.number().int().min(1),
+  lines: z.array(line).min(1).max(500),
+  discountPercent: z.number().min(0).max(100).default(0),
   paidAmount: z.number().min(0).max(100_000_000).default(0),
 });
 
@@ -83,6 +89,45 @@ export function billsRouter() {
     res.json(pubBill(bill));
   });
 
+  r.put("/auto", async (req, res) => {
+    const body = parse(autoBody, req.body);
+    const [period, dealer] = await Promise.all([
+      Period.findById(body.periodId).lean(),
+      Dealer.findOne({ "collectors._id": body.collectorId }).lean(),
+    ]);
+    if (!period) throw new HttpError(400, "ไม่พบงวด");
+    const closedLine = body.lines.find((item) => (period.closedNumbers ?? []).includes(item.number));
+    if (closedLine) throw new HttpError(400, `เลข ${closedLine.number} ปิดรับในงวดนี้ ไม่สามารถซื้อได้`);
+    const collector = dealer?.collectors.find((c) => c._id === body.collectorId);
+    if (!collector) throw new HttpError(400, "ไม่พบผู้ส่งโพย");
+    const grossAmount = body.lines.reduce((sum, item) => sum + item.amount, 0);
+    const discountAmount = Math.round(grossAmount * body.discountPercent) / 100;
+    const amount = Math.round((grossAmount - discountAmount) * 100) / 100;
+    const existing = await Bill.findOne({ collectorId: body.collectorId, periodId: body.periodId, sheet: body.sheet });
+    const paidAmount = body.paidAmount;
+    if (paidAmount > amount) throw new HttpError(400, "ยอดที่จ่ายเกินยอดสุทธิของบิล");
+    const rates = resolveRates(await loadRateConfig(), period.rates ?? {});
+    const bill = existing ?? new Bill({
+      no: `B-${Number(period.drawDate.slice(0, 4)) + 543}-${String(await nextSeq("bill")).padStart(4, "0")}`,
+      collectorId: body.collectorId,
+      sheet: body.sheet,
+      lottery: period.lottery,
+      periodId: body.periodId,
+    });
+    bill.set({ sheet: body.sheet, lines: body.lines, grossAmount, discountPercent: body.discountPercent, discountAmount, amount, outstanding: Math.round((amount - paidAmount) * 100) / 100, rates });
+    await bill.save();
+    if (paidAmount > 0) {
+      await Payment.findOneAndUpdate(
+        { billId: bill._id },
+        { collectorId: body.collectorId, lottery: period.lottery, periodId: period._id, direction: "in", amount: paidAmount, note: `รับเงินตอนคีย์บิล ${bill.no}`, recorded: true },
+        { upsert: true },
+      );
+    } else if (existing) {
+      await Payment.deleteOne({ billId: bill._id });
+    }
+    res.json(pubBill(bill.toObject()));
+  });
+
   r.post("/", async (req, res) => {
     const body = parse(createBody, req.body);
     const [period, dealer] = await Promise.all([
@@ -94,8 +139,6 @@ export function billsRouter() {
     if (closedLine) throw new HttpError(400, `เลข ${closedLine.number} ปิดรับในงวดนี้ ไม่สามารถซื้อได้`);
     const collector = dealer?.collectors.find((c) => c._id === body.collectorId);
     if (!collector) throw new HttpError(400, "ไม่พบผู้ส่งโพย");
-    const customer = body.customerId ? collector.customers.find((c) => c._id === body.customerId) : null;
-    if (body.customerId && !customer) throw new HttpError(400, "ไม่พบลูกค้าในผู้ส่งโพยนี้");
 
     const grossAmount = body.lines.reduce((s, l) => s + l.amount, 0);
     const rates = resolveRates(await loadRateConfig(), period.rates ?? {});
@@ -109,7 +152,6 @@ export function billsRouter() {
     const bill = await Bill.create({
       no: `B-${year}-${String(seq).padStart(4, "0")}`,
       collectorId: body.collectorId,
-      customerId: body.customerId,
       lottery: period.lottery,
       periodId: body.periodId,
       amount,
@@ -123,7 +165,7 @@ export function billsRouter() {
       rateOverrides: Object.fromEntries((period.limitedNumbers ?? []).map((number) => [number, period.limitedRate ?? period.limitedRates?.[number] ?? {}])),
     });
     try {
-      if (paidAmount > 0) await Payment.create({ collectorId: body.collectorId, customerId: body.customerId, lottery: period.lottery, periodId: period._id, direction: "in", amount: paidAmount, note: `รับเงินตอนคีย์บิล ${bill.no}`, recorded: true });
+      if (paidAmount > 0) await Payment.create({ collectorId: body.collectorId, lottery: period.lottery, periodId: period._id, direction: "in", amount: paidAmount, note: `รับเงินตอนคีย์บิล ${bill.no}`, recorded: true });
     } catch (error) {
       await Bill.deleteOne({ _id: bill._id });
       throw error;
@@ -131,7 +173,7 @@ export function billsRouter() {
     try {
       await Activity.create({
         actor: req.user?.name ?? "-",
-        text: `คีย์โพย${customer?.name ?? collector.name} จำนวน ${amount.toLocaleString("th-TH")} บาท`,
+        text: `คีย์โพย${collector.name} จำนวน ${amount.toLocaleString("th-TH")} บาท`,
         collectorId: body.collectorId,
         lottery: period.lottery,
       });

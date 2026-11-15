@@ -8,15 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import { ErrorState } from "@/components/ui/state-panels";
 import { useDealersData } from "@/hooks/use-dealers-data";
-import { customerRows, groupSummary } from "@/lib/calc";
+import { groupSummary } from "@/lib/calc";
 import { cn } from "@/lib/utils";
 import { defaultPeriodId } from "@/lib/period";
 import type { LotteryFilter as LotteryValue } from "@/lib/types";
 import { CollectorProfile } from "./collector-profile";
-import { CustomerBillsDrawer } from "./customer-bills-drawer";
 import { CustomerTabs } from "./customer-tabs";
 import { DealerTree } from "./dealer-tree";
-import { AddCollectorDialog, AddCustomerDialog, AddDealerDialog, EditCollectorDialog } from "./entity-dialogs";
+import { AddCollectorDialog, AddDealerDialog, EditCollectorDialog } from "./entity-dialogs";
 import { FinancialSummaryCards } from "./financial-summary-cards";
 import { GroupSummary } from "./group-summary";
 import { LotteryFilter } from "./lottery-filter";
@@ -39,10 +38,8 @@ export function DealersCustomersPage() {
 
   const [treeOpen, setTreeOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
   const [dealerOpen, setDealerOpen] = useState(false);
   const [collectorOpen, setCollectorOpen] = useState(false);
-  const [viewCustomerId, setViewCustomerId] = useState<string | null>(null);
 
   const data = useDealersData(nonce, (all) => {
     if (lottery === "all") return { lottery, periodId: null, ...range };
@@ -64,16 +61,13 @@ export function DealersCustomersPage() {
 
   const bills = ledger?.bills ?? null;
   const summary = selection && bills ? groupSummary(selection.collector.id, bills, periodMap) : null;
-  const rows = selection && bills ? customerRows(selection.collector, bills, periodMap) : null;
   const groupBills = selection && bills ? bills.filter((b) => b.collectorId === selection.collector.id) : [];
-  const customerNames = new Map((selection?.collector.customers ?? []).map((c) => [c.id, c.name]));
 
-  const selectCollector = (collectorId: string, customerId?: string) => {
+  const selectCollector = (collectorId: string) => {
     setSelectedCollectorId(collectorId);
     const owner = dealers?.find((d) => d.collectors.some((c) => c.id === collectorId));
     if (owner) setExpanded((s) => new Set(s).add(owner.id));
     setTreeOpen(false);
-    setViewCustomerId(customerId ?? null);
   };
 
   const toggleDealer = (id: string) =>
@@ -101,7 +95,6 @@ export function DealersCustomersPage() {
     />
   );
 
-  const viewRow = rows?.find((r) => r.id === viewCustomerId) ?? null;
   // skeleton เฉพาะตอนยังไม่เคยมีข้อมูล; โหลดซ้ำจากการเปลี่ยนตัวกรอง แสดงข้อมูลเดิมแบบจางๆ
   const detailLoading = data.baseLoading || !ledger;
   const refreshing = data.ledgerLoading && !!ledger;
@@ -162,24 +155,21 @@ export function DealersCustomersPage() {
                       collector={selection.collector}
                       lottery={lottery}
                       onEdit={() => setEditOpen(true)}
-                      onAddCustomer={() => setAddOpen(true)}
                     />
                   )}
                   <GroupSummary summary={detailLoading ? null : summary} />
                   <FinancialSummaryCards summary={detailLoading ? null : summary} payerName={selection?.collector.name ?? "-"} />
                   <CustomerTabs
-                    rows={detailLoading ? null : rows}
-                    customerCount={selection?.collector.customers.length ?? 0}
-                    ownBills={groupBills.filter((b) => b.customerId === null)}
+                    bills={groupBills}
+                    loading={detailLoading}
                     payments={(ledger?.payments ?? []).filter((p) => p.collectorId === selection?.collector.id)}
                     periods={periodMap}
                     collectorName={selection?.collector.name ?? ""}
-                    onViewCustomer={setViewCustomerId}
                     key={selection?.collector.id}
                   />
                   <div className="grid gap-4 xl:grid-cols-2">
                     <RecentActivity loading={detailLoading} activities={(ledger?.activities ?? []).filter((a) => a.collectorId === selection?.collector.id).slice(0, 4)} />
-                    <RecentBills loading={detailLoading} bills={groupBills} periods={periodMap} customerNames={customerNames} collectorName={selection?.collector.name ?? ""} />
+                    <RecentBills loading={detailLoading} bills={groupBills} periods={periodMap} ownerName={selection?.collector.name ?? ""} />
                   </div>
                 </div>
               )}
@@ -196,20 +186,11 @@ export function DealersCustomersPage() {
         </SheetContent>
       </Sheet>
 
-      <CustomerBillsDrawer
-        row={viewRow}
-        bills={groupBills.filter((b) => b.customerId === viewCustomerId)}
-        periods={periodMap}
-        collectorName={selection?.collector.name ?? ""}
-        onClose={() => setViewCustomerId(null)}
-      />
-
       <AddDealerDialog open={dealerOpen} onOpenChange={setDealerOpen} onSaved={refresh} />
       {(selection ?? emptyDealer) && <AddCollectorDialog open={collectorOpen} onOpenChange={setCollectorOpen} dealer={(selection?.dealer ?? emptyDealer)!} onSaved={refresh} />}
       {selection && (
         <>
           <EditCollectorDialog open={editOpen} onOpenChange={setEditOpen} dealer={selection.dealer} collector={selection.collector} onSaved={refresh} />
-          <AddCustomerDialog open={addOpen} onOpenChange={setAddOpen} dealer={selection.dealer} collector={selection.collector} onSaved={refresh} />
         </>
       )}
     </>

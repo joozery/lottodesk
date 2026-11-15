@@ -20,7 +20,7 @@ export function dealersRouter() {
 
   r.post("/:dealerId/collectors", async (req, res) => {
     const { name } = parse(nameBody, req.body);
-    const dealer = await Dealer.findByIdAndUpdate(req.params.dealerId, { $push: { collectors: { name, customers: [] } } }, { returnDocument: "after" }).lean();
+    const dealer = await Dealer.findByIdAndUpdate(req.params.dealerId, { $push: { collectors: { name } } }, { returnDocument: "after" }).lean();
     if (!dealer) throw new HttpError(404, "ไม่พบเจ้ามือ");
     res.status(201).json(pubDealer(dealer));
   });
@@ -33,29 +33,6 @@ export function dealersRouter() {
       { returnDocument: "after" },
     ).lean();
     if (!dealer) throw new HttpError(404, "ไม่พบเจ้ามือหรือผู้ส่งโพย");
-    res.json(pubDealer(dealer));
-  });
-
-  r.post("/:dealerId/collectors/:collectorId/customers", async (req, res) => {
-    const { name } = parse(nameBody, req.body);
-    const code = `CUS-${String(await nextSeq("customer")).padStart(3, "0")}`;
-    const dealer = await Dealer.findOneAndUpdate(
-      { _id: req.params.dealerId, "collectors._id": req.params.collectorId },
-      { $push: { "collectors.$.customers": { code, name } } },
-      { returnDocument: "after" },
-    ).lean();
-    if (!dealer) throw new HttpError(404, "ไม่พบเจ้ามือหรือผู้ส่งโพย");
-    res.status(201).json(pubDealer(dealer));
-  });
-
-  r.patch("/:dealerId/collectors/:collectorId/customers/:customerId", async (req, res) => {
-    const { discountPercent } = parse(z.object({ discountPercent: z.number().min(0).max(100) }), req.body);
-    const dealer = await Dealer.findOneAndUpdate(
-      { _id: req.params.dealerId, "collectors._id": req.params.collectorId, "collectors.customers._id": req.params.customerId },
-      { $set: { "collectors.$[collector].customers.$[customer].discountPercent": discountPercent } },
-      { arrayFilters: [{ "collector._id": req.params.collectorId }, { "customer._id": req.params.customerId }], returnDocument: "after" },
-    ).lean();
-    if (!dealer) throw new HttpError(404, "ไม่พบลูกค้า");
     res.json(pubDealer(dealer));
   });
 

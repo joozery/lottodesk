@@ -14,14 +14,8 @@ export const fetchLedger = (filter: LedgerFilter) =>
   api<Ledger>("/ledger", { query: { lottery: filter.lottery, periodId: filter.periodId ?? undefined, from: filter.from || undefined, to: filter.to || undefined } });
 
 /** คืนเจ้ามือที่อัปเดตแล้ว (รวมลูกค้าใหม่) */
-export const createCustomer = (dealerId: string, collectorId: string, name: string) =>
-  api<Dealer>(`/dealers/${dealerId}/collectors/${collectorId}/customers`, { method: "POST", body: { name } });
-export const updateCustomerDiscount = (dealerId: string, collectorId: string, customerId: string, discountPercent: number) =>
-  api<Dealer>(`/dealers/${dealerId}/collectors/${collectorId}/customers/${customerId}`, { method: "PATCH", body: { discountPercent } });
-
 export interface NewBill {
   collectorId: string;
-  customerId: string | null;
   periodId: string;
   lines: BetLine[];
   paid?: boolean;
@@ -30,6 +24,8 @@ export interface NewBill {
   paidAmount?: number;
 }
 export const createBill = (bill: NewBill) => api<Omit<Bill, "prize" | "rates"> & { warnings?: BillWarning[] }>("/bills", { method: "POST", body: bill });
+export const autoSaveBill = (bill: { collectorId: string; periodId: string; sheet: number; lines: BetLine[]; discountPercent: number; paidAmount: number }) =>
+  api<Bill>("/bills/auto", { method: "PUT", body: bill });
 export const updateBillLines = (billId: string, lines: BetLine[]) => api<Bill>(`/bills/${billId}/lines`, { method: "PATCH", body: { lines } });
 export const updateBillDiscount = (billId: string, numberDiscountPercent: number, runDiscountPercent: number) => api<Bill>(`/bills/${billId}/discount`, { method: "PATCH", body: { numberDiscountPercent, runDiscountPercent } });
 

@@ -26,7 +26,6 @@ function buildRows(bills: Bill[], dealers: Dealer[], result: PrizeResult | null)
     .map((bill) => {
       const dealer = dealers.find((d) => d.collectors.some((c) => c.id === bill.collectorId));
       const collector = dealer?.collectors.find((c) => c.id === bill.collectorId);
-      const customer = collector?.customers.find((c) => c.id === bill.customerId);
       const hits = result
         ? bill.lines
             .filter((l) => linePrize(l, bill.lottery, result, { ...(bill.rates ?? RATES), ...(bill.rateOverrides?.[l.number] ?? {}) }) > 0)
@@ -35,7 +34,7 @@ function buildRows(bills: Bill[], dealers: Dealer[], result: PrizeResult | null)
       return {
         bill,
         hits,
-        customer: customer?.name ?? `${collector?.name ?? "-"} (โพยตัวเอง)`,
+        customer: collector?.name ?? "-",
         collector: collector?.name ?? "-",
         dealer: dealer?.name ?? "-",
       };

@@ -8,15 +8,12 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } fr
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select";
-import { formatNumber, lotteryLabel } from "@/lib/format";
+import { lotteryLabel } from "@/lib/format";
 import type { Dealer, Lottery, Payment } from "@/lib/types";
 import { savePayment } from "@/services/payments-service";
 
-const NONE = "__none__";
-
 export interface PaymentDefaults {
   collectorId?: string;
-  customerId?: string;
   billId?: string;
   amount?: number;
   note?: string;
@@ -52,13 +49,12 @@ export function PaymentDialog({ open, onOpenChange, ...body }: Props) {
   );
 }
 
-function PaymentForm({ direction, dealers, outstanding, defaults, lottery, onSaved, onClose }: Omit<Props, "open" | "onOpenChange"> & { onClose: () => void }) {
+function PaymentForm({ direction, dealers, defaults, lottery, onSaved, onClose }: Omit<Props, "open" | "onOpenChange" | "outstanding"> & { onClose: () => void }) {
   const initialDealer = dealers.find((d) => d.collectors.some((c) => c.id === defaults.collectorId)) ?? dealers[0];
   const [dealerId, setDealerId] = useState(initialDealer.id);
   const [collectorId, setCollectorId] = useState(
     initialDealer.collectors.find((c) => c.id === defaults.collectorId)?.id ?? initialDealer.collectors[0].id,
   );
-  const [customerId, setCustomerId] = useState(defaults.customerId ?? NONE);
   const [lotteryValue, setLotteryValue] = useState<Lottery>(lottery);
   const [amount, setAmount] = useState(defaults.amount ? String(defaults.amount) : "");
   const [note, setNote] = useState(defaults.note ?? "");
@@ -68,9 +64,7 @@ function PaymentForm({ direction, dealers, outstanding, defaults, lottery, onSav
 
   const dealer = dealers.find((d) => d.id === dealerId) ?? dealers[0];
   const collector = dealer.collectors.find((c) => c.id === collectorId) ?? dealer.collectors[0];
-  const customer = collector.customers.find((c) => c.id === customerId);
-  const owed = customer ? outstanding[customer.id] ?? 0 : 0;
-  const reducesDebt = direction === "in" && !!customer;
+  const reducesDebt = direction === "in";
   const isIn = direction === "in";
 
   async function onSubmit(e: FormEvent) {
@@ -78,18 +72,15 @@ function PaymentForm({ direction, dealers, outstanding, defaults, lottery, onSav
     const value = Number(amount);
     let error: string | undefined;
     if (!Number.isFinite(value) || value <= 0) error = "กรอกจำนวนเงินที่มากกว่า 0";
-    else if (reducesDebt && owed === 0) error = `${customer!.name} ไม่มียอดค้างชำระ`;
-    else if (reducesDebt && value > owed) error = `เกินยอดค้างของ ${customer!.name} (ค้าง ${formatNumber(owed)} บาท)`;
     setErrors({ amount: error });
     if (error) return;
 
     setSaving(true);
     setFailed(false);
     try {
-      const who = customer?.name ?? collector.name;
+      const who = collector.name;
       const { persisted, payment } = await savePayment({
         collectorId: collector.id,
-        customerId: customer?.id ?? null,
         billId: defaults.billId ?? null,
         lottery: lotteryValue,
         direction,
@@ -123,7 +114,6 @@ function PaymentForm({ direction, dealers, outstanding, defaults, lottery, onSav
             onValueChange={(id) => {
               setDealerId(id);
               setCollectorId(dealers.find((d) => d.id === id)!.collectors[0].id);
-              setCustomerId(NONE);
             }}
           >
             <SelectTrigger />
@@ -131,26 +121,12 @@ function PaymentForm({ direction, dealers, outstanding, defaults, lottery, onSav
           </Select>
         </Field>
         <Field label="ผู้รวบรวมโพย">
-          <Select value={collector.id} onValueChange={(id) => { setCollectorId(id); setCustomerId(NONE); }}>
+          <Select value={collector.id} onValueChange={setCollectorId}>
             <SelectTrigger />
             <SelectContent>{dealer.collectors.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
       </div>
-
-      <Field label="ลูกค้า (ไม่บังคับ)" hint={reducesDebt ? `ยอดค้างปัจจุบัน ${formatNumber(owed)} บาท` : undefined}>
-        <Select value={customerId} onValueChange={setCustomerId}>
-          <SelectTrigger />
-          <SelectContent>
-            <SelectItem value={NONE}>ไม่ระบุลูกค้า (ทั้งกลุ่ม {collector.name})</SelectItem>
-            {collector.customers.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name} ({c.code}){outstanding[c.id] ? ` · ค้าง ${formatNumber(outstanding[c.id])}` : ""}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="ประเภทหวย">

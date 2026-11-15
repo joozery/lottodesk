@@ -15,17 +15,9 @@ export interface Period {
   rates?: Partial<Rates>;
 }
 
-export interface Customer {
-  id: string;
-  code: string;
-  name: string;
-  discountPercent?: number;
-}
-
 export interface Collector {
   id: string;
   name: string;
-  customers: Customer[];
 }
 
 export interface Dealer {
@@ -49,8 +41,7 @@ export interface Bill {
   id: string;
   no: string;
   collectorId: string;
-  /** null = โพยตัวเองของผู้รวบรวม */
-  customerId: string | null;
+  sheet: number;
   lottery: Lottery;
   periodId: string;
   /** ผลรวมของ lines */
@@ -91,8 +82,6 @@ export interface Payment {
   direction: "in" | "out";
   amount: number;
   note: string;
-  /** ลูกค้าที่เกี่ยวข้อง (รับเงินจากลูกค้ารายนี้ → หักยอดค้างชำระ) */
-  customerId?: string | null;
   billId?: string | null;
   /** true = ผู้ใช้บันทึกเอง (เก็บในเบราว์เซอร์), ไม่มี = ข้อมูลตัวอย่าง */
   recorded?: boolean;

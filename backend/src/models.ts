@@ -19,8 +19,7 @@ export const User = defineModel("User", new Schema({
   active: { type: Boolean, default: true },
 }, { timestamps: true }));
 
-const customerSchema = new Schema({ _id: id(), code: { type: String, required: true }, name: { type: String, required: true }, discountPercent: { type: Number, default: 0, min: 0, max: 100 } });
-const collectorSchema = new Schema({ _id: id(), name: { type: String, required: true }, customers: { type: [customerSchema], default: [] } });
+const collectorSchema = new Schema({ _id: id(), name: { type: String, required: true } });
 export const Dealer = defineModel("Dealer", new Schema({
   _id: id(),
   name: { type: String, required: true },
@@ -50,7 +49,7 @@ export const Bill = defineModel("Bill", new Schema({
   _id: id(),
   no: { type: String, required: true, unique: true },
   collectorId: { type: String, required: true, index: true },
-  customerId: { type: String, default: null, index: true },
+  sheet: { type: Number, default: 1, min: 1 },
   lottery,
   periodId: { type: String, required: true, index: true },
   amount: { type: Number, required: true },
@@ -78,7 +77,6 @@ export const Payment = defineModel("Payment", new Schema({
   direction: { type: String, enum: ["in", "out"], required: true },
   amount: { type: Number, required: true, min: 0 },
   note: { type: String, default: "" },
-  customerId: { type: String, default: null },
   billId: { type: String, default: null, index: true },
   /** true = ผู้ใช้บันทึกเอง, false = ข้อมูลตั้งต้น (seed) */
   recorded: { type: Boolean, default: true },

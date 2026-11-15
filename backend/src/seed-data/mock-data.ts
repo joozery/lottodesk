@@ -6,22 +6,16 @@ export const DEALERS: Dealer[] = [
     id: "d-bank",
     name: "นายแบงค์",
     collectors: [
-      { id: "c-a", name: "นายเอ", customers: [
-        { id: "cus-001", code: "CUS-001", name: "คุณบี" },
-        { id: "cus-002", code: "CUS-002", name: "คุณซี" },
-      ] },
-      { id: "c-boy", name: "นายบอย", customers: [
-        { id: "cus-003", code: "CUS-003", name: "คุณดี" },
-        { id: "cus-004", code: "CUS-004", name: "คุณอี" },
-      ] },
-      { id: "c-dew", name: "นายดิว", customers: [{ id: "cus-005", code: "CUS-005", name: "คุณเอฟ" }] },
+      { id: "c-a", name: "นายเอ" },
+      { id: "c-boy", name: "นายบอย" },
+      { id: "c-dew", name: "นายดิว" },
     ],
   },
   {
     id: "d-ton",
     name: "นายต้น",
     collectors: [
-      { id: "c-fil", name: "นายฟิล์ม", customers: [{ id: "cus-006", code: "CUS-006", name: "คุณจี" }] },
+      { id: "c-fil", name: "นายฟิล์ม" },
     ],
   },
 ];
@@ -55,14 +49,14 @@ let seq = 0;
 const L = (type: BetType, number: string, amount: number): BetLine => ({ type, number, amount });
 
 /** amount = ผลรวมของ lines; prize คำนวณตอนโหลดจากผลรางวัลของงวด */
-function bill(collectorId: string, customerId: string | null, periodId: string, lines: BetLine[], outstanding = 0): Bill {
+function bill(collectorId: string, periodId: string, lines: BetLine[], outstanding = 0): Bill {
   const period = PERIODS.find((p) => p.id === periodId)!;
   seq += 1;
   return {
     id: `bill-${seq}`,
     no: `B-2569-${String(seq).padStart(4, "0")}`,
     collectorId,
-    customerId,
+    sheet: seq,
     lottery: period.lottery,
     periodId,
     amount: lines.reduce((s, l) => s + l.amount, 0),
@@ -74,39 +68,35 @@ function bill(collectorId: string, customerId: string | null, periodId: string, 
 }
 
 export const BILLS: Bill[] = [
-  // หวยไทย 16 ต.ค. — นายแบงค์ 26,000 / นายต้น 12,000
-  bill("c-a", null, "th-1016", [L("top2", "55", 600), L("runTop", "7", 400)]),
-  bill("c-a", "cus-001", "th-1016", [L("runTop", "9", 200), L("top2", "77", 500), L("top3", "123", 500)]),
-  bill("c-a", "cus-001", "th-1016", [L("top2", "33", 800)]),
-  bill("c-a", "cus-002", "th-1016", [L("bottom2", "66", 1000), L("top2", "11", 1000)]),
-  bill("c-a", "cus-002", "th-1016", [L("top3", "456", 1000)], 500),
-  bill("c-boy", null, "th-1016", [L("top2", "55", 1000), L("bottom2", "44", 1000)]),
-  bill("c-boy", "cus-003", "th-1016", [L("runTop", "2", 500), L("bottom2", "12", 3500)], 800),
-  bill("c-boy", "cus-003", "th-1016", [L("top2", "33", 2000)]),
-  bill("c-boy", "cus-004", "th-1016", [L("bottom2", "66", 2000), L("top3", "789", 2000)]),
-  bill("c-dew", null, "th-1016", [L("top2", "77", 1000)]),
-  bill("c-dew", "cus-005", "th-1016", [L("bottom2", "44", 3000), L("top2", "11", 4000)], 1000),
-  bill("c-fil", null, "th-1016", [L("top2", "55", 4000)]),
-  bill("c-fil", "cus-006", "th-1016", [L("runBottom", "5", 500), L("top2", "33", 7500)]),
-  // หวยไทย 1 ต.ค.
-  bill("c-a", null, "th-1001", [L("top2", "55", 500)]),
-  bill("c-a", "cus-001", "th-1001", [L("bottom2", "66", 1000)]),
-  bill("c-a", "cus-002", "th-1001", [L("runTop", "4", 500), L("top2", "99", 1500)]),
-  bill("c-boy", "cus-003", "th-1001", [L("bottom2", "44", 3000)]),
-  // หวยไทย 1 พ.ย. (คีย์ล่วงหน้า รอผล)
-  bill("c-a", null, "th-1101", [L("top2", "12", 300)]),
-  bill("c-a", "cus-001", "th-1101", [L("runTop", "3", 200), L("bottom2", "21", 500)]),
-  // หวยลาว
-  bill("c-a", null, "lao-1014", [L("top2", "12", 400)]),
-  bill("c-a", "cus-001", "lao-1014", [L("bottom2", "66", 600)]),
-  bill("c-a", "cus-002", "lao-1014", [L("runTop", "8", 100), L("top2", "55", 800)], 200),
-  bill("c-boy", "cus-004", "lao-1014", [L("top3", "123", 1500)]),
-  bill("c-dew", null, "lao-1014", [L("bottom2", "99", 500)]),
-  bill("c-a", "cus-001", "lao-1016", [L("runBottom", "6", 100), L("top2", "11", 700)]),
-  bill("c-fil", "cus-006", "lao-1016", [L("top2", "55", 1000)]),
-  bill("c-a", null, "lao-1019", [L("top2", "12", 200)]),
-  bill("c-a", "cus-002", "lao-1019", [L("runTop", "3", 500)]),
-  bill("c-boy", null, "lao-1019", [L("bottom2", "88", 300)]),
+  bill("c-a", "th-1016", [L("top2", "55", 600), L("runTop", "7", 400)]),
+  bill("c-a", "th-1016", [L("runTop", "9", 200), L("top2", "77", 500), L("top3", "123", 500)]),
+  bill("c-a", "th-1016", [L("top2", "33", 800)]),
+  bill("c-a", "th-1016", [L("bottom2", "66", 1000), L("top2", "11", 1000)]),
+  bill("c-a", "th-1016", [L("top3", "456", 1000)], 500),
+  bill("c-boy", "th-1016", [L("top2", "55", 1000), L("bottom2", "44", 1000)]),
+  bill("c-boy", "th-1016", [L("runTop", "2", 500), L("bottom2", "12", 3500)], 800),
+  bill("c-boy", "th-1016", [L("top2", "33", 2000)]),
+  bill("c-boy", "th-1016", [L("bottom2", "66", 2000), L("top3", "789", 2000)]),
+  bill("c-dew", "th-1016", [L("top2", "77", 1000)]),
+  bill("c-dew", "th-1016", [L("bottom2", "44", 3000), L("top2", "11", 4000)], 1000),
+  bill("c-fil", "th-1016", [L("top2", "55", 4000)]),
+  bill("c-fil", "th-1016", [L("runBottom", "5", 500), L("top2", "33", 7500)]),
+  bill("c-a", "th-1001", [L("top2", "55", 500)]),
+  bill("c-a", "th-1001", [L("bottom2", "66", 1000)]),
+  bill("c-a", "th-1001", [L("runTop", "4", 500), L("top2", "99", 1500)]),
+  bill("c-boy", "th-1001", [L("bottom2", "44", 3000)]),
+  bill("c-a", "th-1101", [L("top2", "12", 300)]),
+  bill("c-a", "th-1101", [L("runTop", "3", 200), L("bottom2", "21", 500)]),
+  bill("c-a", "lao-1014", [L("top2", "12", 400)]),
+  bill("c-a", "lao-1014", [L("bottom2", "66", 600)]),
+  bill("c-a", "lao-1014", [L("runTop", "8", 100), L("top2", "55", 800)], 200),
+  bill("c-boy", "lao-1014", [L("top3", "123", 1500)]),
+  bill("c-dew", "lao-1014", [L("bottom2", "99", 500)]),
+  bill("c-a", "lao-1016", [L("runBottom", "6", 100), L("top2", "11", 700)]),
+  bill("c-fil", "lao-1016", [L("top2", "55", 1000)]),
+  bill("c-a", "lao-1019", [L("top2", "12", 200)]),
+  bill("c-a", "lao-1019", [L("runTop", "3", 500)]),
+  bill("c-boy", "lao-1019", [L("bottom2", "88", 300)]),
 ];
 
 export const ACTIVITIES: Activity[] = [
