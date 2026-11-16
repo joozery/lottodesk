@@ -359,22 +359,38 @@ export function EntryPage() {
     if (!open) { setNotice("งวดนี้ปิดรับแล้ว กรุณาเลือกงวดที่เปิดรับ"); return; }
     const digits = entryType === "run" ? 1 : Number(entryType);
     if (!new RegExp(`^\\d{${digits}}$`).test(number)) { setNotice(`กรุณากรอกเลข ${digits} หลัก`); numberRef.current?.focus(); return; }
-    const variants = reverse && !editingId
-      ? entryType === "3" ? uniquePermutations(number) : [number, number.split("").reverse().join("")]
+    const todAmount = entryType === "3" ? Number(tod || 0) : 0;
+    const reverseVariants = reverse && !editingId
+      ? [...new Set([number, number.split("").reverse().join("")])]
       : [number];
+    const todVariants = todAmount > 0 && !editingId && entryType === "3" ? uniquePermutations(number) : [];
+    const variants = [...new Set([...reverseVariants, ...todVariants])];
     const closedVariant = variants.find((value) => closedSet.has(value));
     if (closedVariant) { setNotice(`เลข ${closedVariant} ปิดรับในงวดนี้ ไม่สามารถซื้อได้`); return; }
-    const amounts = { top: Number(top || 0), tod: entryType === "3" ? Number(tod || 0) : 0, bottom: Number(bottom || 0) };
+    const amounts = { top: Number(top || 0), tod: todAmount, bottom: Number(bottom || 0) };
     if (Object.values(amounts).some((n) => !Number.isFinite(n) || n < 0) || Object.values(amounts).every((n) => n === 0)) {
       setNotice("กรุณากรอกยอดเงินที่มากกว่า 0"); return;
     }
     const nextRow: EntryRow = { id: editingId ?? entryId("entry"), number, type: entryType, ...amounts };
-    const next = editingId ? rows.map((row) => row.id === editingId ? nextRow : row) : [...rows, nextRow];
-    if (reverse && !editingId) {
-      variants.slice(1).forEach((variant, index) => {
-        next.push({ ...nextRow, id: entryId("entry", `reverse-${index}`), number: variant });
+    if (editingId) {
+      updateRows(rows.map((row) => row.id === editingId ? nextRow : row));
+      if (exceededNumbers.has(number)) setNotice(`เลข ${number} เกินวงเงิน ${money(excessByNumber(number))} กรุณาตรวจสอบก่อนออกบิล`);
+      else if (limitedSet.has(number)) setNotice(`เลข ${number} เป็นเลขอั้นงวดนี้ กรุณาตรวจสอบก่อนออกบิล`);
+      clearEntry(!lockAmount);
+      return;
+    }
+    const rowsByNumber = new Map<string, EntryRow>();
+    for (const variant of variants) {
+      rowsByNumber.set(variant, {
+        id: entryId("entry", variant),
+        number: variant,
+        type: entryType,
+        top: reverseVariants.includes(variant) ? amounts.top : 0,
+        tod: todVariants.includes(variant) ? amounts.tod : 0,
+        bottom: reverseVariants.includes(variant) ? amounts.bottom : 0,
       });
     }
+    const next = [...rows, ...rowsByNumber.values()];
     updateRows(next);
     if (exceededNumbers.has(number)) setNotice(`เลข ${number} เกินวงเงิน ${money(excessByNumber(number))} กรุณาตรวจสอบก่อนออกบิล`);
     else if (limitedSet.has(number)) setNotice(`เลข ${number} เป็นเลขอั้นงวดนี้ กรุณาตรวจสอบก่อนออกบิล`);

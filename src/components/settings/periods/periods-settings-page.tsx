@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState } from "react";
 import { AlertCircle, Calendar, Plus, Trash2 } from "@/components/icons";
@@ -88,83 +88,83 @@ export function PeriodsSettingsPage() {
     setLimitSaving(true);
     try {
       await updateLimitedNumbers(editingPeriodId, entries.map(([number]) => number), {}, Object.fromEntries(Object.entries(rateEntries).filter(([, value]) => value !== "").map(([type, value]) => [type, Number(value)])), {}, Object.fromEntries(Object.entries(limitedRateEntry).filter(([, value]) => value !== "").map(([type, value]) => [type, Number(value)])), closedEntries);
-      setNotice({ ok: true, text: "à¸šà¸±à¸™à¸—à¸¶à¸à¹€à¸¥à¸‚à¸­à¸±à¹‰à¸™à¹à¸¥à¸°à¸§à¸‡à¹€à¸‡à¸´à¸™à¸‚à¸­à¸‡à¸‡à¸§à¸”à¹à¸¥à¹‰à¸§" });
+      setNotice({ ok: true, text: "บันทึกเลขอั้นและวงเงินของงวดแล้ว" });
       setEditingPeriodId(null);
       setNonce((n) => n + 1);
     } catch (e) {
-      setNotice({ ok: false, text: e instanceof Error ? e.message : "à¸šà¸±à¸™à¸—à¸¶à¸à¹€à¸¥à¸‚à¸­à¸±à¹‰à¸™à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ" });
+      setNotice({ ok: false, text: e instanceof Error ? e.message : "บันทึกเลขอั้นไม่สำเร็จ" });
     } finally { setLimitSaving(false); }
   }
 
   async function save() {
     setNotice(null);
-    if (!drawDate) { setNotice({ ok: false, text: "à¸à¸£à¸¸à¸“à¸²à¹€à¸¥à¸·à¸­à¸à¸§à¸±à¸™à¸—à¸µà¹ˆà¸­à¸­à¸à¸£à¸²à¸‡à¸§à¸±à¸¥" }); return; }
+    if (!drawDate) { setNotice({ ok: false, text: "กรุณาเลือกวันที่ออกรางวัล" }); return; }
     setSaving(true);
     try {
       await createPeriod(lottery, drawDate);
       setDrawDate("");
-      setNotice({ ok: true, text: `à¸ªà¸£à¹‰à¸²à¸‡à¸‡à¸§à¸”${lotteryLabel[lottery]} ${formatDate(drawDate)} à¹à¸¥à¹‰à¸§` });
+      setNotice({ ok: true, text: `สร้างงวด${lotteryLabel[lottery]} ${formatDate(drawDate)} แล้ว` });
       setNonce((n) => n + 1);
     } catch (e) {
-      setNotice({ ok: false, text: e instanceof Error ? e.message : "à¸ªà¸£à¹‰à¸²à¸‡à¸‡à¸§à¸”à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ à¸à¸£à¸¸à¸“à¸²à¸¥à¸­à¸‡à¹ƒà¸«à¸¡à¹ˆ" });
+      setNotice({ ok: false, text: e instanceof Error ? e.message : "สร้างงวดไม่สำเร็จ กรุณาลองใหม่" });
     } finally { setSaving(false); }
   }
 
   async function resetBusiness() {
-    if (resetConfirmation !== "à¸¥à¹‰à¸²à¸‡à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸—à¸±à¹‰à¸‡à¸«à¸¡à¸”") return;
+    if (resetConfirmation !== "ล้างข้อมูลทั้งหมด") return;
     setResetting(true);
     try {
       await resetBusinessData();
-      setNotice({ ok: true, text: "à¸£à¸µà¹€à¸‹à¹‡à¸•à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸˜à¸¸à¸£à¸à¸´à¸ˆà¸—à¸±à¹‰à¸‡à¸«à¸¡à¸”à¹à¸¥à¹‰à¸§ à¸œà¸¹à¹‰à¹ƒà¸Šà¹‰ à¸­à¸±à¸•à¸£à¸²à¸ˆà¹ˆà¸²à¸¢ à¹à¸¥à¸°à¸à¸²à¸£à¸•à¸±à¹‰à¸‡à¸„à¹ˆà¸²à¸¢à¸±à¸‡à¸„à¸‡à¸­à¸¢à¸¹à¹ˆ" });
+      setNotice({ ok: true, text: "รีเซ็ตข้อมูลธุรกิจทั้งหมดแล้ว ผู้ใช้ อัตราจ่าย และการตั้งค่ายังคงอยู่" });
       setResetOpen(false);
       setResetConfirmation("");
       setNonce((n) => n + 1);
     } catch (e) {
-      setNotice({ ok: false, text: e instanceof Error ? e.message : "à¸£à¸µà¹€à¸‹à¹‡à¸•à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ" });
+      setNotice({ ok: false, text: e instanceof Error ? e.message : "รีเซ็ตข้อมูลไม่สำเร็จ" });
     } finally { setResetting(false); }
   }
 
   return (
     <>
-      <TopBar breadcrumb={["à¸•à¸±à¹‰à¸‡à¸„à¹ˆà¸²", "à¸‡à¸§à¸”à¸«à¸§à¸¢"]} />
+      <TopBar breadcrumb={["ตั้งค่า", "งวดหวย"]} />
       <main className="mx-auto w-full max-w-[1200px] flex-1 p-4 pb-28 sm:p-6 sm:pb-28">
         <SettingsTabs current="/settings/periods" />
-        <div className="mb-6"><h1 className="text-2xl font-bold text-slate-900">à¸ˆà¸±à¸”à¸à¸²à¸£à¸‡à¸§à¸”à¸«à¸§à¸¢</h1><p className="mt-1 text-sm text-slate-500">à¸ªà¸£à¹‰à¸²à¸‡à¸‡à¸§à¸”à¸¥à¹ˆà¸§à¸‡à¸«à¸™à¹‰à¸²à¸•à¸²à¸¡à¸§à¸±à¸™à¸—à¸µà¹ˆà¸­à¸­à¸à¸£à¸²à¸‡à¸§à¸±à¸¥ à¹€à¸žà¸·à¹ˆà¸­à¹€à¸•à¸£à¸µà¸¢à¸¡à¸£à¸±à¸šà¹€à¸¥à¸‚à¸à¹ˆà¸­à¸™à¸–à¸¶à¸‡à¸§à¸±à¸™à¸­à¸­à¸à¸œà¸¥</p></div>
+        <div className="mb-6"><h1 className="text-2xl font-bold text-slate-900">จัดการงวดหวย</h1><p className="mt-1 text-sm text-slate-500">สร้างงวดล่วงหน้าตามวันที่ออกรางวัล เพื่อเตรียมรับเลขก่อนถึงวันออกผล</p></div>
         <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-          <div className="flex items-center gap-2"><Calendar className="size-5 text-blue-600" /><h2 className="font-semibold text-slate-900">à¸ªà¸£à¹‰à¸²à¸‡à¸‡à¸§à¸”à¹ƒà¸«à¸¡à¹ˆ</h2></div>
+          <div className="flex items-center gap-2"><Calendar className="size-5 text-blue-600" /><h2 className="font-semibold text-slate-900">สร้างงวดใหม่</h2></div>
           <div className="mt-4 grid gap-3 sm:grid-cols-[180px_220px_auto] sm:items-end">
-            <label className="text-sm font-medium text-slate-700">à¸›à¸£à¸°à¹€à¸ à¸—à¸«à¸§à¸¢<Select value={lottery} onValueChange={(value) => setLottery(value as Lottery)}><SelectTrigger className="mt-1" aria-label="à¸›à¸£à¸°à¹€à¸ à¸—à¸«à¸§à¸¢" /><SelectContent><SelectItem value="thai">à¸«à¸§à¸¢à¹„à¸—à¸¢</SelectItem><SelectItem value="lao">à¸«à¸§à¸¢à¸¥à¸²à¸§</SelectItem></SelectContent></Select></label>
-            <label className="text-sm font-medium text-slate-700">à¸§à¸±à¸™à¸—à¸µà¹ˆà¸­à¸­à¸à¸£à¸²à¸‡à¸§à¸±à¸¥<Input className="mt-1" type="date" value={drawDate} onChange={(e) => setDrawDate(e.target.value)} aria-label="à¸§à¸±à¸™à¸—à¸µà¹ˆà¸­à¸­à¸à¸£à¸²à¸‡à¸§à¸±à¸¥" /></label>
-            <Button onClick={() => void save()} disabled={saving}>{saving ? "à¸à¸³à¸¥à¸±à¸‡à¸ªà¸£à¹‰à¸²à¸‡..." : <><Plus className="size-4" /> à¸ªà¸£à¹‰à¸²à¸‡à¸‡à¸§à¸”</>}</Button>
+            <label className="text-sm font-medium text-slate-700">ประเภทหวย<Select value={lottery} onValueChange={(value) => setLottery(value as Lottery)}><SelectTrigger className="mt-1" aria-label="ประเภทหวย" /><SelectContent><SelectItem value="thai">หวยไทย</SelectItem><SelectItem value="lao">หวยลาว</SelectItem></SelectContent></Select></label>
+            <label className="text-sm font-medium text-slate-700">วันที่ออกรางวัล<Input className="mt-1" type="date" value={drawDate} onChange={(e) => setDrawDate(e.target.value)} aria-label="วันที่ออกรางวัล" /></label>
+            <Button onClick={() => void save()} disabled={saving}>{saving ? "กำลังสร้าง..." : <><Plus className="size-4" /> สร้างงวด</>}</Button>
           </div>
           {notice && <p role="status" className={`mt-3 rounded-lg p-3 text-sm ${notice.ok ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}>{notice.text}</p>}
         </section>
-        <section className="mt-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-5"><h2 className="font-semibold text-slate-900">à¸‡à¸§à¸”à¸—à¸µà¹ˆà¸¡à¸µà¸­à¸¢à¸¹à¹ˆ</h2>{error ? <div className="mt-3"><ErrorState onRetry={() => setNonce((n) => n + 1)}>à¹‚à¸«à¸¥à¸”à¸£à¸²à¸¢à¸à¸²à¸£à¸‡à¸§à¸”à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ</ErrorState></div> : !periods ? <Skeleton className="mt-3 h-32 rounded-lg" /> : sortedPeriods.length === 0 ? <p className="mt-3 text-sm text-slate-500">à¸¢à¸±à¸‡à¹„à¸¡à¹ˆà¸¡à¸µà¸‡à¸§à¸” à¸ªà¸£à¹‰à¸²à¸‡à¸‡à¸§à¸”à¹à¸£à¸à¹„à¸”à¹‰à¸ˆà¸²à¸à¹à¸šà¸šà¸Ÿà¸­à¸£à¹Œà¸¡à¸”à¹‰à¸²à¸™à¸šà¸™</p> : <div className="mt-3 divide-y divide-slate-100">{sortedPeriods.map((period) => <div key={period.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"><span className="font-medium text-slate-800">{lotteryLabel[period.lottery]} Â· à¸‡à¸§à¸” {formatDate(period.drawDate)}</span><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${period.status === "confirmed" ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700"}`}>{period.status === "confirmed" ? "à¸¢à¸·à¸™à¸¢à¸±à¸™à¸œà¸¥à¹à¸¥à¹‰à¸§" : "à¹€à¸›à¸´à¸”à¸£à¸±à¸š / à¸£à¸­à¸œà¸¥"}</span></div>)}</div>}</section>
+        <section className="mt-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-5"><h2 className="font-semibold text-slate-900">งวดที่มีอยู่</h2>{error ? <div className="mt-3"><ErrorState onRetry={() => setNonce((n) => n + 1)}>โหลดรายการงวดไม่สำเร็จ</ErrorState></div> : !periods ? <Skeleton className="mt-3 h-32 rounded-lg" /> : sortedPeriods.length === 0 ? <p className="mt-3 text-sm text-slate-500">ยังไม่มีงวด สร้างงวดแรกได้จากแบบฟอร์มด้านบน</p> : <div className="mt-3 divide-y divide-slate-100">{sortedPeriods.map((period) => <div key={period.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm"><span className="font-medium text-slate-800">{lotteryLabel[period.lottery]} · งวด {formatDate(period.drawDate)}</span><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${period.status === "confirmed" ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700"}`}>{period.status === "confirmed" ? "ยืนยันผลแล้ว" : "เปิดรับ / รอผล"}</span></div>)}</div>}</section>
         <section className="mt-5 rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
-          <h2 className="font-semibold text-slate-900">à¹€à¸¥à¸‚à¸­à¸±à¹‰à¸™à¹à¸¥à¸°à¸§à¸‡à¹€à¸‡à¸´à¸™à¸£à¸²à¸¢à¸‡à¸§à¸”</h2>
-          <p className="mt-1 text-sm text-slate-500">à¸à¸³à¸«à¸™à¸”à¹€à¸¥à¸‚à¸­à¸±à¹‰à¸™à¹à¸¥à¸°à¸­à¸±à¸•à¸£à¸²à¸ˆà¹ˆà¸²à¸¢à¹à¸¢à¸à¸•à¸²à¸¡à¸›à¸£à¸°à¹€à¸ à¸—à¸‚à¸­à¸‡à¹à¸•à¹ˆà¸¥à¸°à¹€à¸¥à¸‚</p>
+          <h2 className="font-semibold text-slate-900">เลขอั้นและวงเงินรายงวด</h2>
+          <p className="mt-1 text-sm text-slate-500">กำหนดเลขอั้นและอัตราจ่ายแยกตามประเภทของแต่ละเลข</p>
           <div className="mt-3 divide-y divide-slate-100">
             {sortedPeriods.map((period) => (
               <div key={`limits-${period.id}`} className="py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium text-slate-800">{lotteryLabel[period.lottery]} Â· à¸‡à¸§à¸” {formatDate(period.drawDate)}</span>
-                  <Button type="button" variant="outline" size="sm" onClick={() => editLimits(period)}>{editingPeriodId === period.id ? "à¸›à¸´à¸”" : "à¹€à¸žà¸´à¹ˆà¸¡à¹€à¸¥à¸‚à¸­à¸±à¹‰à¸™"}</Button>
+                  <span className="font-medium text-slate-800">{lotteryLabel[period.lottery]} · งวด {formatDate(period.drawDate)}</span>
+                  <Button type="button" variant="outline" size="sm" onClick={() => editLimits(period)}>{editingPeriodId === period.id ? "ปิด" : "เพิ่มเลขอั้น"}</Button>
                 </div>
                 <div className="mt-2 text-xs text-slate-500">
-                  {(period.limitedNumbers ?? []).length > 0 ? <span>à¹€à¸¥à¸‚à¸­à¸±à¹‰à¸™: {(period.limitedNumbers ?? []).join(", ")}</span> : <span>à¸¢à¸±à¸‡à¹„à¸¡à¹ˆà¹„à¸”à¹‰à¸•à¸±à¹‰à¸‡à¹€à¸¥à¸‚à¸­à¸±à¹‰à¸™</span>}
-                  {Object.keys(period.limitedRate ?? {}).length > 0 && <span className="ml-3">à¸­à¸±à¸•à¸£à¸²à¸ˆà¹ˆà¸²à¸¢à¹€à¸¥à¸‚à¸­à¸±à¹‰à¸™à¸Šà¸¸à¸”à¹€à¸”à¸µà¸¢à¸§: {Object.entries(period.limitedRate ?? {}).map(([type, value]) => `${BET_LABEL[type as keyof typeof RATES]} Ã— ${value}`).join(", ")}</span>}
+                  {(period.limitedNumbers ?? []).length > 0 ? <span>เลขอั้น: {(period.limitedNumbers ?? []).join(", ")}</span> : <span>ยังไม่ได้ตั้งเลขอั้น</span>}
+                  {Object.keys(period.limitedRate ?? {}).length > 0 && <span className="ml-3">อัตราจ่ายเลขอั้นชุดเดียว: {Object.entries(period.limitedRate ?? {}).map(([type, value]) => `${BET_LABEL[type as keyof typeof RATES]} × ${value}`).join(", ")}</span>}
                 </div>
                 {editingPeriodId === period.id && (
                   <div className="mt-3 rounded-lg bg-slate-50 p-3">
                     <div className="grid gap-2 sm:grid-cols-[120px_auto_auto] sm:items-center">
-                      <Input value={limitNumber} onChange={(e) => setLimitNumber(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLimitEntry(); } }} maxLength={3} placeholder="à¹€à¸¥à¸‚ à¹€à¸Šà¹ˆà¸™ 123" aria-label="à¹€à¸¥à¸‚à¸­à¸±à¹‰à¸™" />
-                      <label className="inline-flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={limitReverse} onChange={(e) => setLimitReverse(e.target.checked)} className="accent-blue-600" /> à¸à¸¥à¸±à¸šà¹€à¸¥à¸‚</label>
-                      <Button type="button" onClick={addLimitEntry}>à¹€à¸žà¸´à¹ˆà¸¡</Button>
+                      <Input value={limitNumber} onChange={(e) => setLimitNumber(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLimitEntry(); } }} maxLength={3} placeholder="เลข เช่น 123" aria-label="เลขอั้น" />
+                      <label className="inline-flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={limitReverse} onChange={(e) => setLimitReverse(e.target.checked)} className="accent-blue-600" /> กลับเลข</label>
+                      <Button type="button" onClick={addLimitEntry}>เพิ่ม</Button>
                     </div>
-                    {Object.keys(limitEntries).length > 0 && <div className="mt-3 space-y-2">{Object.entries(limitEntries).map(([number]) => <div key={number} className="rounded border border-slate-200 bg-white p-3"><div className="flex items-center justify-between"><span className="font-mono font-semibold">{number}</span><button type="button" className="text-xs text-red-600" onClick={() => setLimitEntries((current) => { const next = { ...current }; delete next[number]; return next; })}>à¸¥à¸š</button></div></div>)}</div>}
-                    <div className="mt-4 border-t border-slate-200 pt-3"><p className="text-xs font-semibold text-slate-600">à¸­à¸±à¸•à¸£à¸²à¸ˆà¹ˆà¸²à¸¢à¹€à¸¥à¸‚à¸­à¸±à¹‰à¸™ (à¸­à¸±à¸•à¹‚à¸™à¸¡à¸±à¸•à¸´à¸„à¸£à¸¶à¹ˆà¸‡à¸«à¸™à¸¶à¹ˆà¸‡à¸‚à¸­à¸‡à¸­à¸±à¸•à¸£à¸²à¸›à¸à¸•à¸´)</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{Object.entries(RATES).map(([type]) => <label key={type} className="text-xs text-slate-600">{BET_LABEL[type as keyof typeof RATES]}<Input className="mt-1" type="number" value={Math.round((effectiveRates[type as keyof typeof RATES] / 2) * 100) / 100} readOnly disabled /></label>)}</div></div>
-                    <div className="mt-4 border-t border-slate-200 pt-3"><p className="text-xs font-semibold text-red-700">à¹€à¸¥à¸‚à¸›à¸´à¸” (à¸«à¹‰à¸²à¸¡à¸‹à¸·à¹‰à¸­)</p><p className="mt-1 text-[11px] text-slate-500">à¹€à¸¥à¸‚à¹ƒà¸™à¸£à¸²à¸¢à¸à¸²à¸£à¸™à¸µà¹‰à¸ˆà¸°à¹„à¸¡à¹ˆà¸ªà¸²à¸¡à¸²à¸£à¸–à¸„à¸µà¸¢à¹Œà¸«à¸£à¸·à¸­à¸­à¸­à¸à¸šà¸´à¸¥à¹„à¸”à¹‰</p><div className="mt-2 grid gap-2 sm:grid-cols-[120px_auto_auto] sm:items-center"><Input value={closedNumber} onChange={(e) => setClosedNumber(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addClosedEntry(); } }} maxLength={3} placeholder="à¹€à¸¥à¸‚ à¹€à¸Šà¹ˆà¸™ 123" aria-label="à¹€à¸¥à¸‚à¸›à¸´à¸”" /><label className="inline-flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={closedReverse} onChange={(e) => setClosedReverse(e.target.checked)} className="accent-blue-600" /> à¸à¸¥à¸±à¸šà¹€à¸¥à¸‚</label><Button type="button" variant="outline" onClick={addClosedEntry}>à¹€à¸žà¸´à¹ˆà¸¡à¹€à¸¥à¸‚à¸›à¸´à¸”</Button></div>{closedEntries.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{closedEntries.map((number) => <span key={number} className="inline-flex items-center gap-1 rounded bg-red-50 px-2 py-1 font-mono text-xs text-red-700">{number}<button type="button" onClick={() => setClosedEntries((current) => current.filter((value) => value !== number))} aria-label={`à¸¥à¸šà¹€à¸¥à¸‚à¸›à¸´à¸” ${number}`}>Ã—</button></span>)}</div>}</div>
-                    <div className="mt-3 flex justify-end"><Button type="button" onClick={() => void saveLimits()} disabled={limitSaving}>{limitSaving ? "à¸à¸³à¸¥à¸±à¸‡à¸šà¸±à¸™à¸—à¸¶à¸..." : "à¸šà¸±à¸™à¸—à¸¶à¸à¹€à¸¥à¸‚à¸­à¸±à¹‰à¸™à¹à¸¥à¸°à¸­à¸±à¸•à¸£à¸²à¸ˆà¹ˆà¸²à¸¢"}</Button></div>
+                    {Object.keys(limitEntries).length > 0 && <div className="mt-3 space-y-2">{Object.entries(limitEntries).map(([number]) => <div key={number} className="rounded border border-slate-200 bg-white p-3"><div className="flex items-center justify-between"><span className="font-mono font-semibold">{number}</span><button type="button" className="text-xs text-red-600" onClick={() => setLimitEntries((current) => { const next = { ...current }; delete next[number]; return next; })}>ลบ</button></div></div>)}</div>}
+                    <div className="mt-4 border-t border-slate-200 pt-3"><p className="text-xs font-semibold text-slate-600">อัตราจ่ายเลขอั้น (อัตโนมัติครึ่งหนึ่งของอัตราปกติ)</p><div className="mt-2 grid gap-2 sm:grid-cols-2">{Object.entries(RATES).map(([type]) => <label key={type} className="text-xs text-slate-600">{BET_LABEL[type as keyof typeof RATES]}<Input className="mt-1" type="number" value={Math.round((effectiveRates[type as keyof typeof RATES] / 2) * 100) / 100} readOnly disabled /></label>)}</div></div>
+                    <div className="mt-4 border-t border-slate-200 pt-3"><p className="text-xs font-semibold text-red-700">เลขปิด (ห้ามซื้อ)</p><p className="mt-1 text-[11px] text-slate-500">เลขในรายการนี้จะไม่สามารถคีย์หรือออกบิลได้</p><div className="mt-2 grid gap-2 sm:grid-cols-[120px_auto_auto] sm:items-center"><Input value={closedNumber} onChange={(e) => setClosedNumber(e.target.value.replace(/\D/g, ""))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addClosedEntry(); } }} maxLength={3} placeholder="เลข เช่น 123" aria-label="เลขปิด" /><label className="inline-flex items-center gap-2 text-xs text-slate-600"><input type="checkbox" checked={closedReverse} onChange={(e) => setClosedReverse(e.target.checked)} className="accent-blue-600" /> กลับเลข</label><Button type="button" variant="outline" onClick={addClosedEntry}>เพิ่มเลขปิด</Button></div>{closedEntries.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{closedEntries.map((number) => <span key={number} className="inline-flex items-center gap-1 rounded bg-red-50 px-2 py-1 font-mono text-xs text-red-700">{number}<button type="button" onClick={() => setClosedEntries((current) => current.filter((value) => value !== number))} aria-label={`ลบเลขปิด ${number}`}>×</button></span>)}</div>}</div>
+                    <div className="mt-3 flex justify-end"><Button type="button" onClick={() => void saveLimits()} disabled={limitSaving}>{limitSaving ? "กำลังบันทึก..." : "บันทึกเลขอั้นและอัตราจ่าย"}</Button></div>
                   </div>
                 )}
               </div>
@@ -172,9 +172,9 @@ export function PeriodsSettingsPage() {
           </div>
         </section>
         <section className="mt-5 rounded-xl border border-red-200 bg-red-50/50 p-4 sm:p-5">
-          <div className="flex items-start gap-3"><AlertCircle className="mt-0.5 size-5 shrink-0 text-red-600" /><div><h2 className="font-semibold text-red-900">à¸£à¸µà¹€à¸‹à¹‡à¸•à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸˜à¸¸à¸£à¸à¸´à¸ˆ</h2><p className="mt-1 text-sm text-red-800">à¸¥à¸šà¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸˜à¸¸à¸£à¸à¸´à¸ˆà¸—à¸±à¹‰à¸‡à¸«à¸¡à¸” à¹‚à¸”à¸¢à¹„à¸¡à¹ˆà¸¥à¸šà¸œà¸¹à¹‰à¹ƒà¸Šà¹‰ à¸­à¸±à¸•à¸£à¸²à¸ˆà¹ˆà¸²à¸¢ à¸«à¸£à¸·à¸­à¸à¸²à¸£à¸•à¸±à¹‰à¸‡à¸„à¹ˆà¸²</p><Button type="button" variant="outline" className="mt-3 border-red-300 text-red-700 hover:bg-red-100" onClick={() => { setResetConfirmation(""); setResetOpen(true); }} disabled={resetting}><Trash2 className="size-4" />à¸£à¸µà¹€à¸‹à¹‡à¸•à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸˜à¸¸à¸£à¸à¸´à¸ˆà¸—à¸±à¹‰à¸‡à¸«à¸¡à¸”</Button></div></div>
+          <div className="flex items-start gap-3"><AlertCircle className="mt-0.5 size-5 shrink-0 text-red-600" /><div><h2 className="font-semibold text-red-900">รีเซ็ตข้อมูลธุรกิจ</h2><p className="mt-1 text-sm text-red-800">ลบข้อมูลธุรกิจทั้งหมด โดยไม่ลบผู้ใช้ อัตราจ่าย หรือการตั้งค่า</p><Button type="button" variant="outline" className="mt-3 border-red-300 text-red-700 hover:bg-red-100" onClick={() => { setResetConfirmation(""); setResetOpen(true); }} disabled={resetting}><Trash2 className="size-4" />รีเซ็ตข้อมูลธุรกิจทั้งหมด</Button></div></div>
         </section>
-        {resetOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="reset-business-title"><div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl"><div className="flex items-start gap-3"><AlertCircle className="mt-0.5 size-6 shrink-0 text-red-600" /><div><h2 id="reset-business-title" className="text-lg font-bold text-red-900">à¸¢à¸·à¸™à¸¢à¸±à¸™à¸à¸²à¸£à¸£à¸µà¹€à¸‹à¹‡à¸•à¸‚à¹‰à¸­à¸¡à¸¹à¸¥</h2><p className="mt-1 text-sm text-slate-600">à¸à¸²à¸£à¸—à¸³à¸£à¸²à¸¢à¸à¸²à¸£à¸™à¸µà¹‰à¸¥à¸šà¸–à¸²à¸§à¸£à¹à¸¥à¸°à¸à¸¹à¹‰à¸„à¸·à¸™à¹„à¸¡à¹ˆà¹„à¸”à¹‰ à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸—à¸µà¹ˆà¸ˆà¸°à¸–à¸¹à¸à¸¥à¸šà¸„à¸·à¸­:</p><ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700"><li>à¹€à¸ˆà¹‰à¸²à¸”à¸µà¸¥à¹€à¸¥à¸­à¸£à¹Œ à¸œà¸¹à¹‰à¸£à¸§à¸šà¸£à¸§à¸¡ à¹à¸¥à¸°à¸¥à¸¹à¸à¸„à¹‰à¸²à¸¢à¹ˆà¸­à¸¢</li><li>à¸‡à¸§à¸”à¸«à¸§à¸¢à¹à¸¥à¸°à¸šà¸´à¸¥à¸—à¸±à¹‰à¸‡à¸«à¸¡à¸”</li><li>à¸£à¸²à¸¢à¸à¸²à¸£à¸£à¸±à¸šâ€“à¸ˆà¹ˆà¸²à¸¢à¹€à¸‡à¸´à¸™</li><li>à¸œà¸¥à¸£à¸²à¸‡à¸§à¸±à¸¥à¹à¸¥à¸°à¹à¸œà¹ˆà¸™à¸•à¸µà¸­à¸­à¸</li><li>à¸›à¸£à¸°à¸§à¸±à¸•à¸´à¸à¸´à¸ˆà¸à¸£à¸£à¸¡</li><li>à¸•à¸±à¸§à¸™à¸±à¸šà¹€à¸¥à¸‚à¸šà¸´à¸¥à¹à¸¥à¸°à¸£à¸«à¸±à¸ªà¸¥à¸¹à¸à¸„à¹‰à¸²</li></ul><p className="mt-4 text-sm font-medium text-slate-700">à¸ˆà¸°à¹„à¸¡à¹ˆà¸¥à¸šà¸œà¸¹à¹‰à¹ƒà¸Šà¹‰ à¸­à¸±à¸•à¸£à¸²à¸ˆà¹ˆà¸²à¸¢ à¸«à¸£à¸·à¸­à¸à¸²à¸£à¸•à¸±à¹‰à¸‡à¸„à¹ˆà¸²</p><label className="mt-4 block text-sm font-medium text-slate-700">à¸žà¸´à¸¡à¸žà¹Œ <span className="font-bold text-red-700">à¸¥à¹‰à¸²à¸‡à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸—à¸±à¹‰à¸‡à¸«à¸¡à¸”</span> à¹€à¸žà¸·à¹ˆà¸­à¸¢à¸·à¸™à¸¢à¸±à¸™<Input className="mt-1" value={resetConfirmation} onChange={(event) => setResetConfirmation(event.target.value)} placeholder="à¸¥à¹‰à¸²à¸‡à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸—à¸±à¹‰à¸‡à¸«à¸¡à¸”" autoFocus /></label><div className="mt-5 flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => { setResetOpen(false); setResetConfirmation(""); }} disabled={resetting}>à¸¢à¸à¹€à¸¥à¸´à¸</Button><Button type="button" className="bg-red-600 hover:bg-red-700" onClick={() => void resetBusiness()} disabled={resetting || resetConfirmation !== "à¸¥à¹‰à¸²à¸‡à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸—à¸±à¹‰à¸‡à¸«à¸¡à¸”"}>{resetting ? "à¸à¸³à¸¥à¸±à¸‡à¸¥à¸šà¸‚à¹‰à¸­à¸¡à¸¹à¸¥..." : "à¸¢à¸·à¸™à¸¢à¸±à¸™à¸¥à¸šà¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸—à¸±à¹‰à¸‡à¸«à¸¡à¸”"}</Button></div></div></div></div></div>}
+        {resetOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true" aria-labelledby="reset-business-title"><div className="w-full max-w-lg rounded-xl bg-white p-5 shadow-xl"><div className="flex items-start gap-3"><AlertCircle className="mt-0.5 size-6 shrink-0 text-red-600" /><div><h2 id="reset-business-title" className="text-lg font-bold text-red-900">ยืนยันการรีเซ็ตข้อมูล</h2><p className="mt-1 text-sm text-slate-600">การทำรายการนี้ลบถาวรและกู้คืนไม่ได้ ข้อมูลที่จะถูกลบคือ:</p><ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-700"><li>เจ้าดีลเลอร์ ผู้รวบรวม และลูกค้าย่อย</li><li>งวดหวยและบิลทั้งหมด</li><li>รายการรับ–จ่ายเงิน</li><li>ผลรางวัลและแผ่นตีออก</li><li>ประวัติกิจกรรม</li><li>ตัวนับเลขบิลและรหัสลูกค้า</li></ul><p className="mt-4 text-sm font-medium text-slate-700">จะไม่ลบผู้ใช้ อัตราจ่าย หรือการตั้งค่า</p><label className="mt-4 block text-sm font-medium text-slate-700">พิมพ์ <span className="font-bold text-red-700">ล้างข้อมูลทั้งหมด</span> เพื่อยืนยัน<Input className="mt-1" value={resetConfirmation} onChange={(event) => setResetConfirmation(event.target.value)} placeholder="ล้างข้อมูลทั้งหมด" autoFocus /></label><div className="mt-5 flex justify-end gap-2"><Button type="button" variant="outline" onClick={() => { setResetOpen(false); setResetConfirmation(""); }} disabled={resetting}>ยกเลิก</Button><Button type="button" className="bg-red-600 hover:bg-red-700" onClick={() => void resetBusiness()} disabled={resetting || resetConfirmation !== "ล้างข้อมูลทั้งหมด"}>{resetting ? "กำลังลบข้อมูล..." : "ยืนยันลบข้อมูลทั้งหมด"}</Button></div></div></div></div></div>}
       </main>
     </>
   );

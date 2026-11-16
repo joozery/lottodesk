@@ -138,8 +138,9 @@ function Commissions({ dealers, initial }: { dealers: Dealer[]; initial: Record<
   const [notice, setNotice] = useState<Notice>(null);
 
   const bad = (id: string) => {
-    const n = Number(draft[id]);
-    return draft[id].trim() === "" || !Number.isFinite(n) || n < 0 || n > 100;
+    const raw = draft[id] ?? "";
+    const n = Number(raw);
+    return raw.trim() === "" || !Number.isFinite(n) || n < 0 || n > 100;
   };
   const changed = dealers.filter((d) => !bad(d.id) && Number(draft[d.id]) !== (saved[d.id] ?? 0));
   const anyBad = dealers.some((d) => bad(d.id));
@@ -176,7 +177,7 @@ function Commissions({ dealers, initial }: { dealers: Dealer[]; initial: Record<
                   max="100"
                   step="any"
                   inputMode="decimal"
-                  value={draft[d.id]}
+                  value={draft[d.id] ?? ""}
                   aria-label={`ค่าคอมมิชชัน ${d.name}`}
                   aria-invalid={bad(d.id)}
                   onChange={(e) => { setDraft((s) => ({ ...s, [d.id]: e.target.value })); setNotice(null); }}
